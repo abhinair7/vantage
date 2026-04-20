@@ -91,28 +91,28 @@ export function Runner({ query, result, onDone }: Props) {
             style={{
               display: "flex",
               alignItems: "baseline",
-              gap: "0.6rem",
+              gap: "0.7rem",
             }}
           >
             <span
               style={{
                 fontFamily: "var(--font-display)",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 500,
                 color: "var(--fg-1)",
-                letterSpacing: "-0.01em",
+                letterSpacing: "-0.012em",
               }}
             >
-              Pipeline
+              {activeNode.name}
             </span>
             <span
               className="mono"
               style={{
-                fontSize: 12,
-                color: "var(--fg-3)",
+                fontSize: 11,
+                color: "var(--fg-4)",
               }}
             >
-              {progressed}/{total} · {activeNode.name}
+              {String(progressed).padStart(2, "0")} / {String(total).padStart(2, "0")}
             </span>
           </div>
           <span
@@ -226,42 +226,26 @@ export function Runner({ query, result, onDone }: Props) {
           style={{
             borderTop: "1px solid var(--line)",
             paddingTop: "0.9rem",
-            display: "flex",
-            gap: "0.9rem",
-            alignItems: "flex-start",
           }}
         >
-          <span
+          <div
+            style={{
+              fontSize: 14,
+              color: "var(--fg-1)",
+              letterSpacing: "-0.01em",
+              marginBottom: 2,
+            }}
+          >
+            {activeNode.processing.split(". ")[0]}.
+          </div>
+          <div
             className="mono"
             style={{
               fontSize: 11,
               color: "var(--fg-4)",
-              flex: "0 0 auto",
-              paddingTop: 2,
             }}
           >
-            {String(progressed).padStart(2, "0")}
-          </span>
-          <div>
-            <div
-              style={{
-                fontSize: 14,
-                color: "var(--fg-1)",
-                letterSpacing: "-0.01em",
-                marginBottom: 2,
-              }}
-            >
-              {activeNode.processing.split(". ")[0]}.
-            </div>
-            <div
-              className="mono"
-              style={{
-                fontSize: 11,
-                color: "var(--fg-4)",
-              }}
-            >
-              {activeNode.sectionRef}
-            </div>
+            {activeNode.sectionRef}
           </div>
         </div>
       </div>

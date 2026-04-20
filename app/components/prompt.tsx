@@ -125,28 +125,27 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
     >
       <div
         className="eyebrow"
-        style={{ marginBottom: "1.4rem", color: "var(--fg-4)" }}
+        style={{ marginBottom: "1.8rem", color: "var(--fg-4)" }}
       >
-        VANTAGE · INTERFACE LAYER FOR EARTH OBSERVATION
+        VANTAGE
       </div>
 
-      <h1 className="display-xl" style={{ maxWidth: 18 + "ch", margin: "0 auto" }}>
+      <h1 className="display-xl" style={{ maxWidth: 15 + "ch", margin: "0 auto" }}>
         Ask Earth anything.
       </h1>
 
       <p
         style={{
-          maxWidth: 640,
-          margin: "1.4rem auto 0",
-          fontSize: 19,
-          lineHeight: 1.47,
+          maxWidth: 560,
+          margin: "1.1rem auto 0",
+          fontSize: 18,
+          lineHeight: 1.45,
           color: "var(--fg-3)",
           letterSpacing: "-0.012em",
         }}
       >
         A chat-first interface to satellite imagery, vessel positions, and the
-        entity graph. Every answer carries its source. When the evidence
-        isn&rsquo;t there, the answer says so.
+        entity graph. Every answer carries its source.
       </p>
 
       <form
@@ -224,7 +223,7 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
           </button>
         </div>
 
-        {/* Suggestion chips */}
+        {/* Suggestion chips — the "TRY" eyebrow is noise; the chips already look like prompts */}
         <div
           style={{
             display: "flex",
@@ -233,12 +232,6 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
             justifyContent: "center",
           }}
         >
-          <span
-            className="eyebrow"
-            style={{ alignSelf: "center", marginRight: "0.3rem", color: "var(--fg-4)" }}
-          >
-            TRY
-          </span>
           {EXAMPLE_PROMPTS.map((p) => (
             <button
               key={p.query}

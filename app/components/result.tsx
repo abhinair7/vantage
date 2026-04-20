@@ -59,15 +59,15 @@ export function Result({ result, onReset }: Props) {
         display: "grid",
         gridTemplateColumns: isInsufficient
           ? "1fr"
-          : "minmax(0, 1.1fr) minmax(0, 1fr)",
-        gap: "1.6rem",
+          : "minmax(0, 1.618fr) minmax(0, 1fr)",
+        gap: "2rem",
       }}
     >
       {!isInsufficient && result.aoi && (
         <div
-          className="card"
+          className="card card-lifted"
           style={{
-            minHeight: 520,
+            minHeight: 560,
             position: "relative",
             padding: 0,
             overflow: "hidden",
@@ -111,15 +111,22 @@ export function Result({ result, onReset }: Props) {
               {(result.tookMs / 1000).toFixed(2)}s
             </span>
             {!isInsufficient && (
-              <>
-                <span className="mono" style={{ color: "var(--fg-4)", fontSize: 11 }}>
-                  confidence {(result.confidence * 100).toFixed(0)}%
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+                aria-label={`Confidence ${(result.confidence * 100).toFixed(0)} percent`}
+              >
+                <span className="mono" style={{ color: "var(--fg-3)", fontSize: 11 }}>
+                  {(result.confidence * 100).toFixed(0)}%
                 </span>
                 <div
                   aria-hidden
                   style={{
                     flex: "0 0 120px",
-                    height: 4,
+                    height: 3,
                     background: "var(--line)",
                     borderRadius: 999,
                     position: "relative",
@@ -131,18 +138,13 @@ export function Result({ result, onReset }: Props) {
                       position: "absolute",
                       inset: 0,
                       width: `${Math.round(result.confidence * 100)}%`,
-                      background:
-                        result.confidence >= 0.85
-                          ? "var(--good)"
-                          : result.confidence >= 0.7
-                          ? "var(--accent)"
-                          : "var(--warn)",
+                      background: "var(--accent)",
                       borderRadius: 999,
                       transition: "width var(--t-slow) var(--ease-apple)",
                     }}
                   />
                 </div>
-              </>
+              </div>
             )}
           </div>
 
@@ -150,11 +152,11 @@ export function Result({ result, onReset }: Props) {
             className="display-md"
             style={{
               marginTop: 0,
-              letterSpacing: "-0.018em",
+              letterSpacing: "-0.028em",
               color: "var(--fg-1)",
               fontWeight: 600,
-              fontSize: 26,
-              lineHeight: 1.2,
+              fontSize: 32,
+              lineHeight: 1.1,
             }}
           >
             {result.headline}
@@ -240,7 +242,7 @@ export function Result({ result, onReset }: Props) {
             >
               <span>EVIDENCE LEDGER</span>
               <span style={{ color: "var(--fg-4)" }}>
-                {result.evidence.length} records · click to locate
+                {result.evidence.length}
               </span>
             </div>
             <div
@@ -335,7 +337,7 @@ export function Result({ result, onReset }: Props) {
           >
             <span>How this was computed</span>
             <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
-              methodology
+              +
             </span>
           </summary>
           <ul

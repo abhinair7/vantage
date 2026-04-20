@@ -94,10 +94,10 @@ body {
 .display-xl {
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
+  letter-spacing: -0.042em;
+  line-height: 1.0;
   color: var(--fg-1);
-  font-size: clamp(2.8rem, 7vw, 5.2rem);
+  font-size: clamp(3rem, 8.2vw, 6.2rem);
 }
 
 .display-lg {
@@ -132,8 +132,8 @@ body {
 
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--fg-4);
   font-feature-settings: "tnum" 1;
@@ -246,6 +246,21 @@ body {
   border-radius: 12px;
 }
 
+/* The map gets the one earned shadow — everything else stays paper-flat */
+.card-lifted {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 12px 28px -10px rgba(0, 0, 0, 0.10);
+}
+
+/* A hairline rule, used only where movement/separation is needed */
+.rule {
+  height: 1px;
+  background: var(--line);
+  border: 0;
+  margin: 0;
+}
+
 /* Pipeline node dot */
 .node-dot {
   width: 10px;
@@ -285,6 +300,7 @@ body {
   transition: background var(--t-quick) var(--ease-apple);
   vertical-align: baseline;
   text-decoration: none;
+  user-select: none;
 }
 .evidence-ref:hover {
   background: rgba(0, 113, 227, 0.16);
@@ -513,15 +529,11 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(0, 113, 227, 0); }
 }
 
-/* Evidence chip — add click feedback since they're interactive now */
-.evidence-ref {
-  user-select: none;
-}
 .evidence-ref:active {
   transform: scale(0.96);
 }
 .evidence-ref.is-hovered {
-  background: rgba(0, 113, 227, 0.2);
+  background: rgba(0, 113, 227, 0.18);
   outline: 1px solid rgba(0, 113, 227, 0.35);
 }
 
