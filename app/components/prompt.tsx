@@ -115,139 +115,312 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
   }
 
   return (
-    <section
-      className="page"
-      style={{
-        paddingTop: "clamp(4rem, 14vh, 9rem)",
-        paddingBottom: "clamp(2rem, 6vh, 3.5rem)",
-        textAlign: "center",
-      }}
-    >
-      <div
-        className="eyebrow"
-        style={{ marginBottom: "1.8rem", color: "var(--fg-4)" }}
-      >
-        VANTAGE
-      </div>
-
-      <h1 className="display-xl" style={{ maxWidth: 15 + "ch", margin: "0 auto" }}>
-        Ask Earth anything.
-      </h1>
-
-      <p
+    <>
+      {/* Top masthead — editorial wordmark + standfirst */}
+      <header
+        className="page"
         style={{
-          maxWidth: 560,
-          margin: "1.1rem auto 0",
-          fontSize: 18,
-          lineHeight: 1.45,
-          color: "var(--fg-3)",
-          letterSpacing: "-0.012em",
-        }}
-      >
-        A chat-first interface to satellite imagery, vessel positions, and the
-        entity graph. Every answer carries its source.
-      </p>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-        style={{
-          marginTop: "2.6rem",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
-          gap: "1.3rem",
+          justifyContent: "space-between",
+          paddingTop: "1.6rem",
+          paddingBottom: "0.6rem",
+          borderBottom: "1px solid var(--line)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            color: "var(--fg-1)",
+          }}
+        >
+          Vantage
+        </span>
+        <span className="eyebrow">Earth Observation · Volume 01</span>
+      </header>
+
+      {/* Hero — asymmetric editorial. Headline flush-left, meta flush-right. */}
+      <section
+        className="page"
+        style={{
+          paddingTop: "clamp(3.5rem, 11vh, 7.5rem)",
+          paddingBottom: "clamp(2rem, 5vh, 3rem)",
         }}
       >
         <div
           style={{
-            width: "min(780px, 100%)",
-            display: "flex",
-            gap: "0.5rem",
-            alignItems: "flex-end",
-            background: "var(--bg-soft)",
-            border: "1px solid var(--line)",
-            borderRadius: 22,
-            padding: "1rem 1rem 1rem 1.4rem",
-            transition: "border-color var(--t-quick) var(--ease-apple)",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.618fr) minmax(0, 1fr)",
+            columnGap: "clamp(1.5rem, 4vw, 3rem)",
+            rowGap: "2.4rem",
+            alignItems: "end",
           }}
         >
-          <textarea
-            ref={ref}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={1}
-            aria-label="Ask Earth anything"
-            placeholder="e.g. Has construction at Mundra Port increased over the last 6 months?"
-            style={{
-              flex: 1,
-              resize: "none",
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "var(--fg-1)",
-              fontFamily: "var(--font-display)",
-              fontSize: 20,
-              letterSpacing: "-0.015em",
-              lineHeight: 1.35,
-              padding: "0.25rem 0",
-              maxHeight: 240,
-            }}
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            aria-label="Ask"
-            disabled={!value.trim()}
-            style={{
-              height: 44,
-              width: 44,
-              padding: 0,
-              borderRadius: 999,
-              fontSize: 18,
-            }}
-          >
-            {/* arrow up */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M12 19V5M12 5l-6 6M12 5l6 6"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
+          {/* Left: the headline. Serif, italic mid-word, left-aligned, huge. */}
+          <div>
+            <div className="eyebrow" style={{ marginBottom: "1.4rem" }}>
+              <span className="editorial-num">01.</span>{" "}
+              <span style={{ marginLeft: 6 }}>THE QUESTION</span>
+            </div>
+            <h1 className="display-serif" style={{ margin: 0, maxWidth: "14ch" }}>
+              Ask <em>Earth</em> anything.
+            </h1>
+          </div>
 
-        {/* Suggestion chips — the "TRY" eyebrow is noise; the chips already look like prompts */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.5rem",
-            justifyContent: "center",
-          }}
-        >
-          {EXAMPLE_PROMPTS.map((p) => (
-            <button
-              key={p.query}
-              type="button"
-              className="chip"
-              onClick={() => {
-                setValue(p.query);
-                // Submit on the next tick so the input visibly updates first
-                window.setTimeout(() => onSubmit(p.query), 60);
+          {/* Right: the standfirst, aligned to the bottom baseline of the headline. */}
+          <aside style={{ paddingBottom: "0.6rem" }}>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-serif)",
+                fontSize: "clamp(1.05rem, 1.35vw, 1.2rem)",
+                lineHeight: 1.45,
+                color: "var(--fg-2)",
+                letterSpacing: "-0.01em",
+                maxWidth: "36ch",
               }}
             >
-              {p.label}
-            </button>
+              A chat-first interface to satellite imagery, vessel positions, and
+              the entity graph. Every answer carries its source.
+            </p>
+          </aside>
+        </div>
+
+        {/* Thin rule — framing principle, separates the headline block from the input */}
+        <hr className="rule" style={{ marginTop: "clamp(2rem, 5vh, 3.5rem)" }} />
+
+        {/* Input — left-aligned at full width, with the numbered examples as an
+            editorial list underneath, not a centered chip soup. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          style={{
+            marginTop: "clamp(1.8rem, 4vh, 2.4rem)",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.618fr) minmax(0, 1fr)",
+            columnGap: "clamp(1.5rem, 4vw, 3rem)",
+            rowGap: "1.6rem",
+            alignItems: "start",
+          }}
+        >
+          <div>
+            <label
+              className="eyebrow"
+              htmlFor="vantage-prompt"
+              style={{ display: "block", marginBottom: "0.7rem" }}
+            >
+              <span className="editorial-num">02.</span>{" "}
+              <span style={{ marginLeft: 6 }}>ENTER A PROMPT</span>
+            </label>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "flex-end",
+                background: "var(--bg-soft)",
+                border: "1px solid var(--line)",
+                borderRadius: 18,
+                padding: "0.9rem 0.9rem 0.9rem 1.25rem",
+                transition: "border-color var(--t-quick) var(--ease-apple)",
+              }}
+            >
+              <textarea
+                id="vantage-prompt"
+                ref={ref}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={onKeyDown}
+                rows={1}
+                aria-label="Ask Earth anything"
+                placeholder="e.g. Has construction at Mundra Port increased over the last 6 months?"
+                style={{
+                  flex: 1,
+                  resize: "none",
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  color: "var(--fg-1)",
+                  fontFamily: "var(--font-serif)",
+                  fontSize: 19,
+                  letterSpacing: "-0.012em",
+                  lineHeight: 1.4,
+                  padding: "0.25rem 0",
+                  maxHeight: 240,
+                }}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                aria-label="Ask"
+                disabled={!value.trim()}
+                style={{
+                  height: 42,
+                  width: 42,
+                  padding: 0,
+                  borderRadius: 999,
+                  fontSize: 18,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M12 19V5M12 5l-6 6M12 5l6 6"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Right column: numbered example list, editorial, left-aligned */}
+          <div>
+            <div className="eyebrow" style={{ marginBottom: "0.7rem" }}>
+              <span className="editorial-num">03.</span>{" "}
+              <span style={{ marginLeft: 6 }}>OR PICK ONE</span>
+            </div>
+            <ol
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 0,
+                borderTop: "1px solid var(--line)",
+              }}
+            >
+              {EXAMPLE_PROMPTS.map((p, i) => (
+                <li key={p.query} style={{ borderBottom: "1px solid var(--line)" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue(p.query);
+                      window.setTimeout(() => onSubmit(p.query), 60);
+                    }}
+                    style={{
+                      all: "unset",
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr auto",
+                      columnGap: "0.8rem",
+                      alignItems: "baseline",
+                      padding: "0.75rem 0.1rem",
+                      cursor: "pointer",
+                      color: "var(--fg-1)",
+                      transition: "color var(--t-quick) var(--ease-apple)",
+                      fontFamily: "var(--font-serif)",
+                      fontSize: 15,
+                      letterSpacing: "-0.008em",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = "var(--accent)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-1)";
+                    }}
+                  >
+                    <span className="editorial-num" style={{ color: "var(--fg-4)" }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span>{p.label}</span>
+                    <span
+                      aria-hidden
+                      style={{ color: "var(--fg-4)", fontSize: 14, lineHeight: 1 }}
+                    >
+                      ↗
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </form>
+      </section>
+
+      {/* Second band — editorial "what it does". Numbered trio, serif
+          propositions, the same typographic vocabulary as the hero so the page
+          reads as one issue, not a landing page with a features grid. */}
+      <section
+        className="page"
+        style={{
+          paddingTop: "clamp(3rem, 8vh, 5rem)",
+          paddingBottom: "clamp(3rem, 8vh, 5rem)",
+          borderTop: "1px solid var(--line)",
+        }}
+      >
+        <div className="eyebrow" style={{ marginBottom: "2rem" }}>
+          WHAT VANTAGE ANSWERS
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            columnGap: "clamp(1.5rem, 4vw, 3rem)",
+            rowGap: "2.2rem",
+          }}
+        >
+          {CAPABILITIES.map((c, i) => (
+            <article key={c.title} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+              <span className="editorial-num" style={{ color: "var(--fg-3)" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <h3
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-serif)",
+                  fontSize: "clamp(1.35rem, 2vw, 1.65rem)",
+                  fontWeight: 500,
+                  letterSpacing: "-0.015em",
+                  lineHeight: 1.1,
+                  color: "var(--fg-1)",
+                }}
+              >
+                {c.title}
+              </h3>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 14.5,
+                  lineHeight: 1.5,
+                  letterSpacing: "-0.008em",
+                  color: "var(--fg-3)",
+                  maxWidth: "32ch",
+                }}
+              >
+                {c.body}
+              </p>
+            </article>
           ))}
         </div>
-      </form>
-    </section>
+      </section>
+    </>
   );
 }
+
+/** The three editorial propositions below the hero. Kept as data so the
+ *  layout stays typographic, not prose. */
+const CAPABILITIES: Array<{ title: string; body: string }> = [
+  {
+    title: "Ports, in motion.",
+    body:
+      "Berth occupancy, vessel dwell times, quay construction — resolved down to the ship and the crane.",
+  },
+  {
+    title: "Commodities, measured.",
+    body:
+      "Oil tank fills, stockpile volumes, acreage planted. Every number backed by a pixel and a timestamp.",
+  },
+  {
+    title: "Activity, sourced.",
+    body:
+      "Vehicle counts, thermal signatures, nightlights. Answers carry their evidence or the system refuses to guess.",
+  },
+];
