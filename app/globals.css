@@ -330,6 +330,222 @@ body {
   animation: fade-up var(--t-slow) var(--ease-apple) both;
 }
 
+/* ------------------------------------------------------------------
+   Map chrome — floating overlays on top of the MapLibre canvas
+   ------------------------------------------------------------------ */
+
+.map-chrome {
+  position: absolute;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.3rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.map-chrome .seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.65rem;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--fg-2);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background var(--t-quick) var(--ease-apple),
+              color var(--t-quick) var(--ease-apple);
+  min-width: 30px;
+}
+
+.map-chrome .seg:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--fg-1);
+}
+
+.map-chrome .seg.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.map-chrome .divider {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  margin: 0 0.15rem;
+}
+
+/* Before/after reveal slider */
+.compare-slider {
+  position: absolute;
+  left: 0.8rem;
+  right: 0.8rem;
+  bottom: 0.8rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.compare-slider input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    rgba(110, 110, 115, 0.35) 0%,
+    rgba(110, 110, 115, 0.35) calc(var(--pos, 50%)),
+    rgba(0, 113, 227, 0.6) calc(var(--pos, 50%)),
+    rgba(0, 113, 227, 0.6) 100%
+  );
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.compare-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.compare-slider input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  border: 1.5px solid var(--accent);
+}
+
+/* ------------------------------------------------------------------
+   Marker glyphs — vessels, tanks, beacons. Placed as HTMLElements by
+   maplibregl.Marker so they stay pinned to geo coordinates.
+   ------------------------------------------------------------------ */
+
+.vx-marker {
+  cursor: pointer;
+  transition: transform var(--t-quick) var(--ease-apple),
+              filter var(--t-quick) var(--ease-apple);
+}
+.vx-marker:hover { transform: scale(1.15); }
+.vx-marker.is-focused { animation: vx-focus 1.4s ease-in-out 2; }
+@keyframes vx-focus {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(0, 113, 227, 0)); }
+  50%      { filter: drop-shadow(0 0 10px rgba(0, 113, 227, 0.95)); }
+}
+
+/* Vessel — filled triangle pointing up, Apple-blue, with drop shadow */
+.vx-vessel {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  animation: vx-vessel-bob 3.2s ease-in-out infinite;
+}
+@keyframes vx-vessel-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.5px); }
+}
+
+/* Tank — circle with inner fill indicating storage level */
+.vx-tank {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.4px solid var(--fg-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.vx-tank::after {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  right: 1.5px;
+  bottom: 1.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
+  height: calc((100% - 3px) * var(--fill, 0.5));
+  transition: height var(--t-base) var(--ease-apple);
+}
+
+/* Beacon — pulsing dot for "activity detected" */
+.vx-beacon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.55);
+  animation: vx-beacon 1.8s ease-out infinite;
+}
+@keyframes vx-beacon {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(0, 113, 227, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 113, 227, 0); }
+}
+
+/* Evidence chip — add click feedback since they're interactive now */
+.evidence-ref {
+  user-select: none;
+}
+.evidence-ref:active {
+  transform: scale(0.96);
+}
+.evidence-ref.is-hovered {
+  background: rgba(0, 113, 227, 0.2);
+  outline: 1px solid rgba(0, 113, 227, 0.35);
+}
+
+/* Evidence ledger row — short flash animation on focus */
+@keyframes vx-flash {
+  0%   { background: rgba(0, 113, 227, 0.18); box-shadow: inset 0 0 0 1px rgba(0, 113, 227, 0.45); }
+  100% { background: rgba(0, 113, 227, 0.06); box-shadow: inset 0 0 0 1px rgba(0, 113, 227, 0.25); }
+}
+.is-flashed {
+  animation: vx-flash 1200ms var(--ease-apple) 1 both;
+}
+
+/* MapLibre popup override — borderless, Apple */
+.maplibregl-popup-content {
+  padding: 0.45rem 0.7rem !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important;
+}
+.maplibregl-popup-tip {
+  border-top-color: rgba(255, 255, 255, 0.96) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

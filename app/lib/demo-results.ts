@@ -20,12 +20,25 @@ export type Polygon = {
   date: string;
   coords: [number, number][]; // [lon, lat] ring, closed
   accent: "current" | "previous";
+  evidenceRef?: string;       // which evidence record this polygon backs
+};
+
+export type Marker = {
+  id: string;
+  kind: "vessel" | "tank" | "beacon";
+  coord: [number, number];
+  evidenceRef?: string;
+  label?: string;
+  fill?: number;              // 0..1 — used by tank shadow glyph
 };
 
 export type AOI = {
   center: [number, number]; // [lon, lat]
   zoom: number;
   polygons: Polygon[];
+  markers?: Marker[];
+  /** optional point to fly to when the user clicks a given evidence id */
+  evidenceFocus?: Record<string, { center: [number, number]; zoom?: number }>;
 };
 
 export type NarrativeChunk = {
@@ -89,6 +102,7 @@ const MUNDRA: DemoResult = {
         label: "Oct 2024 footprint",
         date: "2024-10-11",
         accent: "previous",
+        evidenceRef: "e1",
         coords: [
           [69.6985, 22.7455],
           [69.7045, 22.7456],
@@ -101,6 +115,7 @@ const MUNDRA: DemoResult = {
         label: "Feb 2025 footprint",
         date: "2025-02-03",
         accent: "current",
+        evidenceRef: "e2",
         coords: [
           [69.6978, 22.7462],
           [69.7085, 22.7465],
@@ -110,6 +125,22 @@ const MUNDRA: DemoResult = {
         ],
       },
     ],
+    markers: [
+      // Synthetic AIS berth occupancy — five vessels along the new quay edge
+      { id: "v1", kind: "vessel", coord: [69.6995, 22.7458], evidenceRef: "e4", label: "MSC OSCAR · berth 1" },
+      { id: "v2", kind: "vessel", coord: [69.7020, 22.7459], evidenceRef: "e4", label: "COSCO SHIPPING · berth 2" },
+      { id: "v3", kind: "vessel", coord: [69.7045, 22.7460], evidenceRef: "e4", label: "CMA CGM MARCO · berth 3" },
+      { id: "v4", kind: "vessel", coord: [69.7070, 22.7461], evidenceRef: "e4", label: "EVER ACE · berth 4" },
+      { id: "v5", kind: "vessel", coord: [69.7081, 22.7449], evidenceRef: "e4", label: "MAERSK HONAM · berth 5" },
+    ],
+    evidenceFocus: {
+      e1: { center: [69.7015, 22.7437], zoom: 14.4 },
+      e2: { center: [69.7032, 22.7436], zoom: 14.4 },
+      e3: { center: [69.7055, 22.7440], zoom: 14.2 },
+      e4: { center: [69.7035, 22.7459], zoom: 14.8 },
+      e5: { center: [69.708, 22.745], zoom: 13.6 },
+      e6: { center: [69.708, 22.745], zoom: 13.4 },
+    },
   },
   evidence: [
     {
@@ -201,6 +232,7 @@ const CUSHING: DemoResult = {
         label: "Cushing tank farm AOI",
         date: "2025-04-14",
         accent: "current",
+        evidenceRef: "c2",
         coords: [
           [-96.778, 35.9905],
           [-96.753, 35.9908],
@@ -210,6 +242,33 @@ const CUSHING: DemoResult = {
         ],
       },
     ],
+    // 17 monitored floating-roof tanks with synthetic fill fractions — the
+    // map renders these as circle glyphs whose inner fill tracks `fill`.
+    markers: [
+      { id: "t01", kind: "tank", coord: [-96.7765, 35.9895], evidenceRef: "c1", label: "tank 01", fill: 0.62 },
+      { id: "t02", kind: "tank", coord: [-96.7744, 35.9897], evidenceRef: "c1", label: "tank 02", fill: 0.48 },
+      { id: "t03", kind: "tank", coord: [-96.7722, 35.9899], evidenceRef: "c1", label: "tank 03", fill: 0.71 },
+      { id: "t04", kind: "tank", coord: [-96.7700, 35.9898], evidenceRef: "c1", label: "tank 04", fill: 0.55 },
+      { id: "t05", kind: "tank", coord: [-96.7678, 35.9896], evidenceRef: "c1", label: "tank 05", fill: 0.40 },
+      { id: "t06", kind: "tank", coord: [-96.7656, 35.9893], evidenceRef: "c1", label: "tank 06", fill: 0.66 },
+      { id: "t07", kind: "tank", coord: [-96.7635, 35.9891], evidenceRef: "c1", label: "tank 07", fill: 0.53 },
+      { id: "t08", kind: "tank", coord: [-96.7759, 35.9860], evidenceRef: "c1", label: "tank 08", fill: 0.38 },
+      { id: "t09", kind: "tank", coord: [-96.7736, 35.9858], evidenceRef: "c1", label: "tank 09", fill: 0.74 },
+      { id: "t10", kind: "tank", coord: [-96.7714, 35.9861], evidenceRef: "c1", label: "tank 10", fill: 0.50 },
+      { id: "t11", kind: "tank", coord: [-96.7691, 35.9859], evidenceRef: "c1", label: "tank 11", fill: 0.57 },
+      { id: "t12", kind: "tank", coord: [-96.7668, 35.9857], evidenceRef: "c1", label: "tank 12", fill: 0.63 },
+      { id: "t13", kind: "tank", coord: [-96.7646, 35.9855], evidenceRef: "c1", label: "tank 13", fill: 0.41 },
+      { id: "t14", kind: "tank", coord: [-96.7755, 35.9821], evidenceRef: "c1", label: "tank 14", fill: 0.69 },
+      { id: "t15", kind: "tank", coord: [-96.7728, 35.9823], evidenceRef: "c1", label: "tank 15", fill: 0.44 },
+      { id: "t16", kind: "tank", coord: [-96.7701, 35.9820], evidenceRef: "c1", label: "tank 16", fill: 0.58 },
+      { id: "t17", kind: "tank", coord: [-96.7673, 35.9818], evidenceRef: "c1", label: "tank 17", fill: 0.51 },
+    ],
+    evidenceFocus: {
+      c1: { center: [-96.7700, 35.9860], zoom: 14.4 },
+      c2: { center: [-96.7673, 35.9856], zoom: 13.6 },
+      c3: { center: [-96.7710, 35.9858], zoom: 14.0 },
+      c4: { center: [-96.7673, 35.9856], zoom: 13.2 },
+    },
   },
   evidence: [
     {
@@ -286,6 +345,7 @@ const SHENZHEN: DemoResult = {
         label: "Facility footprint",
         date: "2025-04-12",
         accent: "current",
+        evidenceRef: "s1",
         coords: [
           [114.1102, 22.5503],
           [114.1126, 22.5503],
@@ -295,6 +355,18 @@ const SHENZHEN: DemoResult = {
         ],
       },
     ],
+    markers: [
+      // Detected trucks in the south-side court — pulse as "activity"
+      { id: "b1", kind: "beacon", coord: [114.1108, 22.5490], evidenceRef: "s1", label: "truck court · 12 vehicles" },
+      { id: "b2", kind: "beacon", coord: [114.1120, 22.5489], evidenceRef: "s1", label: "truck court · loading bay" },
+    ],
+    evidenceFocus: {
+      s1: { center: [114.1114, 22.5495], zoom: 17.1 },
+      s2: { center: [114.1114, 22.5495], zoom: 16.6 },
+      s3: { center: [114.1113, 22.5496], zoom: 16.2 },
+      s4: { center: [114.1113, 22.5496], zoom: 16.2 },
+      s5: { center: [114.1113, 22.5496], zoom: 16.0 },
+    },
   },
   evidence: [
     {
