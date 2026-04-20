@@ -1,0 +1,427 @@
+/**
+ * Pre-baked demo analyses.
+ * Each result is what Vantage would return — narrative with inline evidence refs,
+ * evidence ledger with sources/timestamps, AOI polygon(s), confidence score.
+ *
+ * In the real system these come from the 10-node pipeline. Here they're static
+ * fixtures so the prototype is a working demo without live API dependencies.
+ */
+
+export type Evidence = {
+  id: string;           // short id used in narrative refs
+  kind: "image" | "sar" | "ais" | "event" | "entity" | "measurement";
+  claim: string;        // short human claim
+  source: string;       // source + timestamp line
+  hash: string;         // SHA-like string — audit trail
+};
+
+export type Polygon = {
+  label: string;
+  date: string;
+  coords: [number, number][]; // [lon, lat] ring, closed
+  accent: "current" | "previous";
+};
+
+export type AOI = {
+  center: [number, number]; // [lon, lat]
+  zoom: number;
+  polygons: Polygon[];
+};
+
+export type NarrativeChunk = {
+  text: string;
+  refs: string[];
+};
+
+export type DemoResult = {
+  id: string;
+  query: string;
+  headline: string;        // the one-sentence answer
+  narrative: NarrativeChunk[];
+  aoi?: AOI;
+  evidence: Evidence[];
+  confidence: number;      // 0..1
+  mode: "investigate" | "verify" | "monitor";
+  tookMs: number;          // simulated processing time
+  methodology: string[];   // bullets shown under "how this was computed"
+  kind: "answer" | "insufficient";
+};
+
+/* ------------------------------------------------------------------
+   Primary demo: Mundra Port construction
+   ------------------------------------------------------------------ */
+
+const MUNDRA: DemoResult = {
+  id: "mundra_construction_6mo",
+  query: "Has construction at Mundra Port increased over the last 6 months?",
+  headline:
+    "Yes. Quay footprint at the western container terminal grew 8.4% between October 2024 and February 2025.",
+  mode: "investigate",
+  tookMs: 2840,
+  confidence: 0.86,
+  narrative: [
+    {
+      text:
+        "Between the Sentinel-2 passes on 2024-10-11 and 2025-02-03, the built-up footprint of the western terminal at Mundra Port expanded by 8.4%.",
+      refs: ["e1", "e2"],
+    },
+    {
+      text:
+        "A Sentinel-1 SAR acquisition on 2025-03-19 independently corroborates the change — the backscatter signature over the new quay is consistent with hard surfaces added since the October pass.",
+      refs: ["e3"],
+    },
+    {
+      text:
+        "AIS berth-occupancy is up 22% year-over-year over the 30 days ending 2025-04-14, which is consistent with commissioning of additional capacity rather than a reshuffle of existing traffic.",
+      refs: ["e4"],
+    },
+    {
+      text:
+        "The operator, Adani Ports & Special Economic Zone Ltd, disclosed ₹1,880 cr of container-terminal capex in its Q1 filing. Ownership traces cleanly through OpenCorporates and Wikidata Q786408.",
+      refs: ["e5", "e6"],
+    },
+  ],
+  aoi: {
+    center: [69.708, 22.745],
+    zoom: 13.2,
+    polygons: [
+      {
+        label: "Oct 2024 footprint",
+        date: "2024-10-11",
+        accent: "previous",
+        coords: [
+          [69.6985, 22.7455],
+          [69.7045, 22.7456],
+          [69.7046, 22.7420],
+          [69.6986, 22.7418],
+          [69.6985, 22.7455],
+        ],
+      },
+      {
+        label: "Feb 2025 footprint",
+        date: "2025-02-03",
+        accent: "current",
+        coords: [
+          [69.6978, 22.7462],
+          [69.7085, 22.7465],
+          [69.7087, 22.7410],
+          [69.6980, 22.7408],
+          [69.6978, 22.7462],
+        ],
+      },
+    ],
+  },
+  evidence: [
+    {
+      id: "e1",
+      kind: "image",
+      claim: "Sentinel-2 L2A — 2024-10-11 baseline.",
+      source: "Copernicus Open Access Hub · tile T42QZK · band B8",
+      hash: "0xa7f2…c4e1",
+    },
+    {
+      id: "e2",
+      kind: "image",
+      claim: "Sentinel-2 L2A — 2025-02-03 comparison.",
+      source: "Copernicus Open Access Hub · tile T42QZK · Clay v0.4 segmentation",
+      hash: "0xb301…f019",
+    },
+    {
+      id: "e3",
+      kind: "sar",
+      claim: "Sentinel-1 GRD — 2025-03-19 SAR corroboration.",
+      source: "Copernicus · VV polarization · 20 m",
+      hash: "0x9c10…2b07",
+    },
+    {
+      id: "e4",
+      kind: "ais",
+      claim: "Berth-occupancy dwell-time aggregation.",
+      source: "AISStream · geofence 22.74°N 69.70°E · dwell ≥ 3 h · 30 d window",
+      hash: "0x3e18…a902",
+    },
+    {
+      id: "e5",
+      kind: "event",
+      claim: "Adani Ports Q1 FY25 investor filing excerpt.",
+      source: "GDELT · CORP_FINANCE_QUARTERLY · doc 0x8a3f",
+      hash: "0x8a3f…7111",
+    },
+    {
+      id: "e6",
+      kind: "entity",
+      claim: "Ownership chain: APSEZL → Adani Ports & SEZ → Q786408.",
+      source: "OpenCorporates · Wikidata · 2-hop ownership edges",
+      hash: "0x0be7…1104",
+    },
+  ],
+  methodology: [
+    "Clay v0.4 foundation model applied to Sentinel-2 L2A for built-up delta.",
+    "SAR backscatter Δ computed against a 90-day rolling baseline.",
+    "AIS dwell-time aggregation geofenced to the AOI, excluding ships-at-anchor.",
+    "Ownership chain validated by 2 independent sources (OpenCorporates + Wikidata).",
+  ],
+  kind: "answer",
+};
+
+/* ------------------------------------------------------------------
+   Secondary demo: Cushing oil storage
+   ------------------------------------------------------------------ */
+
+const CUSHING: DemoResult = {
+  id: "cushing_oil_storage",
+  query: "Has oil storage at Cushing, Oklahoma changed since March?",
+  headline:
+    "Inventory drew down an estimated 4.2 million barrels between 2025-03-01 and 2025-04-14.",
+  mode: "monitor",
+  tookMs: 2410,
+  confidence: 0.79,
+  narrative: [
+    {
+      text:
+        "Floating-roof tank shadow analysis across 17 monitored tanks at the Cushing, OK, hub shows a net drawdown of approximately 4.2 million barrels between 2025-03-01 and 2025-04-14.",
+      refs: ["c1", "c2"],
+    },
+    {
+      text:
+        "Sentinel-2 passes on 2025-03-14, 2025-03-29, and 2025-04-13 gave clean reads; two March passes were rejected for >30% cloud cover and fell back to SAR shadow-band proxy measurements.",
+      refs: ["c3"],
+    },
+    {
+      text:
+        "The drawdown is directionally consistent with EIA weekly stocks and CME WTI term structure over the same window, though only imagery is used for the estimate above.",
+      refs: ["c4"],
+    },
+  ],
+  aoi: {
+    center: [-96.7673, 35.9856],
+    zoom: 13.1,
+    polygons: [
+      {
+        label: "Cushing tank farm AOI",
+        date: "2025-04-14",
+        accent: "current",
+        coords: [
+          [-96.778, 35.9905],
+          [-96.753, 35.9908],
+          [-96.752, 35.9801],
+          [-96.779, 35.9798],
+          [-96.778, 35.9905],
+        ],
+      },
+    ],
+  },
+  evidence: [
+    {
+      id: "c1",
+      kind: "measurement",
+      claim: "17 floating-roof tanks · shadow Δ −24.1% mean fill.",
+      source: "Sentinel-2 L2A · Clay v0.4 + solar-geometry shadow model",
+      hash: "0x412a…99f0",
+    },
+    {
+      id: "c2",
+      kind: "image",
+      claim: "Sentinel-2 2025-03-01 baseline and 2025-04-13 comparison.",
+      source: "Copernicus Open Access Hub · tile T14SPH",
+      hash: "0x77b1…e103",
+    },
+    {
+      id: "c3",
+      kind: "sar",
+      claim: "Sentinel-1 SAR fallback for 2 cloudy March dates.",
+      source: "Copernicus · VV + VH polarization",
+      hash: "0x2d90…8104",
+    },
+    {
+      id: "c4",
+      kind: "event",
+      claim: "EIA weekly stocks (for context only, not in the estimate).",
+      source: "EIA STEO · WPR · Cushing hub",
+      hash: "0xe104…3a07",
+    },
+  ],
+  methodology: [
+    "Shadow-band estimation with per-tank solar geometry; tank ring geometries cached.",
+    "SAR fallback when cloud cover >30% over AOI — flagged in output.",
+    "EIA data used only for cross-check, not as input to the headline number.",
+  ],
+  kind: "answer",
+};
+
+/* ------------------------------------------------------------------
+   Tertiary demo: Shenzhen Luohu — verify mode
+   ------------------------------------------------------------------ */
+
+const SHENZHEN: DemoResult = {
+  id: "shenzhen_facility_verify",
+  query: "Verify this company's manufacturing facility in Shenzhen exists.",
+  headline:
+    "Facility confirmed at 22.55°N 114.11°E. Ownership chain clean. Last detected activity 2025-04-12.",
+  mode: "verify",
+  tookMs: 3120,
+  confidence: 0.92,
+  narrative: [
+    {
+      text:
+        "The facility at 22.5496°N 114.1113°E is operational. Rooftop and truck-court activity on the 2025-04-12 Sentinel-2 L2A pass matches the 2024-10 reference.",
+      refs: ["s1", "s2"],
+    },
+    {
+      text:
+        "Operator chain traced: the on-site signage (OSM + Overture Places crosswalk) resolves to OpenCorporates entity Q4829913, which matches the Wikidata industrial-parks registry.",
+      refs: ["s3", "s4"],
+    },
+    {
+      text:
+        "No sanctions list hits (OFAC SDN · EU CFSP · UK HMT). No adverse media above the configured confidence floor.",
+      refs: ["s5"],
+    },
+  ],
+  aoi: {
+    center: [114.1113, 22.5496],
+    zoom: 16.2,
+    polygons: [
+      {
+        label: "Facility footprint",
+        date: "2025-04-12",
+        accent: "current",
+        coords: [
+          [114.1102, 22.5503],
+          [114.1126, 22.5503],
+          [114.1126, 22.5487],
+          [114.1102, 22.5487],
+          [114.1102, 22.5503],
+        ],
+      },
+    ],
+  },
+  evidence: [
+    {
+      id: "s1",
+      kind: "image",
+      claim: "Sentinel-2 L2A 2025-04-12 — rooftop + truck-court activity.",
+      source: "Copernicus · tile T50QKG · Grounding-DINO truck detection",
+      hash: "0xe302…ab10",
+    },
+    {
+      id: "s2",
+      kind: "image",
+      claim: "Reference 2024-10-07 — same AOI, same imaging geometry.",
+      source: "Copernicus · tile T50QKG",
+      hash: "0x9010…c2f7",
+    },
+    {
+      id: "s3",
+      kind: "entity",
+      claim: "Crosswalk: OSM place → Overture → OpenCorporates Q4829913.",
+      source: "Overture Places · OpenCorporates",
+      hash: "0x2441…9802",
+    },
+    {
+      id: "s4",
+      kind: "entity",
+      claim: "Wikidata industrial-parks registry confirms operator.",
+      source: "Wikidata",
+      hash: "0xb712…4103",
+    },
+    {
+      id: "s5",
+      kind: "event",
+      claim: "No hits across OFAC SDN / EU CFSP / UK HMT.",
+      source: "OFAC · EU · UK sanctions lists, cached 2025-04-15",
+      hash: "0x00f0…0f01",
+    },
+  ],
+  methodology: [
+    "Facility existence confirmed by rooftop + truck-court activity across two independent Sentinel-2 passes.",
+    "Ownership chain requires two independent registry sources.",
+    "Sanctions checks run against all three primary lists; missing check fails the whole chain.",
+  ],
+  kind: "answer",
+};
+
+/* ------------------------------------------------------------------
+   Fallback — what the Gatekeeper returns when thresholds fail
+   ------------------------------------------------------------------ */
+
+const INSUFFICIENT: DemoResult = {
+  id: "insufficient",
+  query: "",
+  headline: "Insufficient evidence.",
+  mode: "investigate",
+  tookMs: 920,
+  confidence: 0,
+  kind: "insufficient",
+  narrative: [
+    {
+      text:
+        "The Gatekeeper could not clear enough independent sources to answer this confidently. The model was not consulted — giving it the question would have created an incentive to fabricate around the gap.",
+      refs: [],
+    },
+  ],
+  evidence: [],
+  methodology: [
+    "Freshness — newest imagery older than the 30-day window for current-state claims.",
+    "Cloud cover — Sentinel-2 tiles over the AOI above the 30% rejection threshold; no SAR fallback within range.",
+    "Source diversity — activity-level claims require both imagery and at least one non-imagery signal.",
+    "Attribution — every factual edge requires a source URL; edges without attribution are dropped.",
+  ],
+};
+
+/* ------------------------------------------------------------------
+   Export
+   ------------------------------------------------------------------ */
+
+export const DEMO_RESULTS: Record<string, DemoResult> = {
+  [MUNDRA.id]: MUNDRA,
+  [CUSHING.id]: CUSHING,
+  [SHENZHEN.id]: SHENZHEN,
+  insufficient: INSUFFICIENT,
+};
+
+/**
+ * Cheap fuzzy matcher — keyword-scores an incoming query against the demo set.
+ * If nothing scores above threshold, returns the insufficient-evidence fallback
+ * (which is the correct product behavior).
+ */
+export function matchQuery(q: string): DemoResult {
+  const lower = q.toLowerCase();
+  const candidates: { id: string; score: number }[] = [
+    {
+      id: MUNDRA.id,
+      score:
+        (lower.includes("mundra") ? 3 : 0) +
+        (lower.includes("port") ? 1 : 0) +
+        (lower.includes("construction") ? 1 : 0),
+    },
+    {
+      id: CUSHING.id,
+      score:
+        (lower.includes("cushing") ? 3 : 0) +
+        (lower.includes("oil") || lower.includes("storage") ? 1 : 0) +
+        (lower.includes("oklahoma") ? 1 : 0),
+    },
+    {
+      id: SHENZHEN.id,
+      score:
+        (lower.includes("shenzhen") ? 3 : 0) +
+        (lower.includes("verify") || lower.includes("facility") ? 1 : 0) +
+        (lower.includes("manufactur") ? 1 : 0),
+    },
+  ];
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates[0].score >= 2) return DEMO_RESULTS[candidates[0].id];
+
+  const fallback: DemoResult = {
+    ...INSUFFICIENT,
+    query: q,
+  };
+  return fallback;
+}
+
+export const EXAMPLE_PROMPTS: { label: string; query: string }[] = [
+  { label: "Mundra Port construction", query: MUNDRA.query },
+  { label: "Cushing oil storage", query: CUSHING.query },
+  { label: "Verify Shenzhen facility", query: SHENZHEN.query },
+];
