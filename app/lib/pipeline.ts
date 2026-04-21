@@ -144,3 +144,61 @@ export const PIPELINE: PipelineNode[] = [
 ];
 
 export const LLM_NODE_IDS = new Set(["0", "F"]);
+
+/* ------------------------------------------------------------------
+   Customer-facing pipeline.
+
+   We run 10 nodes internally. A customer does not care whether the
+   data is written to Postgres, whether we run NLI entailment on a
+   local DeBERTa, or whether the formatter prepends a social preview.
+   They care about the moments that feel like thinking.
+
+   These are those moments — six steps, each a real engineering phase,
+   labelled in product English.
+   ------------------------------------------------------------------ */
+
+export type CustomerStep = {
+  id: string;
+  label: string;
+  sublabel: string;
+  touch: NodeTouch;
+};
+
+export const CUSTOMER_PIPELINE: CustomerStep[] = [
+  {
+    id: "parse",
+    label: "Understanding your question",
+    sublabel: "Parsing intent, place, and time window",
+    touch: "LLM",
+  },
+  {
+    id: "locate",
+    label: "Locating the area",
+    sublabel: "Resolving to canonical geometry",
+    touch: "DETRM",
+  },
+  {
+    id: "pull",
+    label: "Pulling imagery & signals",
+    sublabel: "Sentinel-2, SAR, AIS, entity graph",
+    touch: "DETRM",
+  },
+  {
+    id: "measure",
+    label: "Analyzing imagery",
+    sublabel: "Vision models, never the LLM",
+    touch: "ML",
+  },
+  {
+    id: "verify",
+    label: "Verifying evidence",
+    sublabel: "Source checks, cross-reference, confidence floor",
+    touch: "DETRM",
+  },
+  {
+    id: "compose",
+    label: "Composing the answer",
+    sublabel: "Narrator on a leash — every claim cited",
+    touch: "LLM",
+  },
+];

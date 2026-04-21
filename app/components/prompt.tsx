@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { EXAMPLE_PROMPTS } from "../lib/demo-results";
 
 type Props = {
@@ -123,72 +123,31 @@ function HeroFull({
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
-  const { scrollY } = useScroll();
-  // Hero content dissolves as we scroll past it
-  const heroOpacity = useTransform(scrollY, [0, 240, 480], [1, 0.6, 0]);
-  const heroY = useTransform(scrollY, [0, 600], [0, -80]);
-  const heroBlur = useTransform(scrollY, [0, 500], [0, 6]);
-  const scrimOpacity = useTransform(scrollY, [0, 400], [1, 0.55]);
-
   return (
     <>
-      {/* Masthead — fixed over the globe */}
-      <header className="masthead">
-        <span className="masthead-brand">Vantage</span>
-        <span className="masthead-meta">
-          <span>EARTH OBSERVATION</span>
-          <span className="masthead-dot" />
-          <span>VOLUME 01</span>
-        </span>
-      </header>
+      {/* Hero — full viewport. Earth sits inside the telescope aperture.
+          Headline + input live in the dark housing BELOW the aperture so
+          nothing fights for attention. No entrance animations.           */}
+      <section className="hero">
+        <div className="hero-scrim" aria-hidden />
 
-      {/* Hero — full viewport, text over the 3D globe */}
-      <motion.section
-        className="hero"
-        style={{ opacity: heroOpacity, y: heroY, filter: useTransform(heroBlur, (b) => `blur(${b}px)`) }}
-      >
-        {/* Legibility scrim — radial dim around the centre so text stays crisp */}
-        <motion.div className="hero-scrim" style={{ opacity: scrimOpacity }} aria-hidden />
+        <div className="hero-content">
+          <div className="hero-caption">
+            <h1 className="display-serif hero-headline">
+              Ask <em>Earth</em> anything.
+            </h1>
+            <p className="hero-sub">
+              Satellite imagery, vessel positions, and the entity graph —
+              resolved through one prompt. Every answer carries its source.
+            </p>
+          </div>
 
-        <div className="hero-content page">
-          <motion.div
-            className="hero-kicker"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 0.61, 0.36, 1] }}
-          >
-            <span className="hero-kicker-dot" />
-            <span>A chat-first interface to Earth observation</span>
-          </motion.div>
-
-          <motion.h1
-            className="display-serif hero-headline"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
-          >
-            Ask <em>Earth</em> anything.
-          </motion.h1>
-
-          <motion.p
-            className="hero-sub"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
-          >
-            Satellite imagery, vessel positions, and the entity graph — resolved
-            through one prompt. Every answer carries its source, or it says so.
-          </motion.p>
-
-          <motion.form
+          <form
             onSubmit={(e) => {
               e.preventDefault();
               submit();
             }}
             className="hero-input-wrap"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.65, ease: [0.22, 0.61, 0.36, 1] }}
           >
             <div className="hero-input">
               <textarea
@@ -198,7 +157,7 @@ function HeroFull({
                 onKeyDown={onKeyDown}
                 rows={1}
                 aria-label="Ask Earth anything"
-                placeholder="e.g. Has construction at Mundra Port increased over the last 6 months?"
+                placeholder="Has construction at Mundra Port increased over the last 6 months?"
               />
               <button type="submit" aria-label="Ask" disabled={!value.trim()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -212,21 +171,11 @@ function HeroFull({
                 </svg>
               </button>
             </div>
-          </motion.form>
-
-          <motion.div
-            className="hero-scroll-hint"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.1 }}
-          >
-            <span>scroll to explore</span>
-            <span className="hero-scroll-line" />
-          </motion.div>
+          </form>
         </div>
-      </motion.section>
+      </section>
 
-      {/* Examples band — on the white paper, scrolled into view */}
+      {/* Examples band — white paper below the hero. No entrance staggers. */}
       <section className="band band-white">
         <div className="page band-inner">
           <div className="eyebrow" style={{ marginBottom: "2rem" }}>
@@ -234,13 +183,7 @@ function HeroFull({
           </div>
           <ol className="editorial-list">
             {EXAMPLE_PROMPTS.map((p, i) => (
-              <motion.li
-                key={p.query}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.5, delay: i * 0.06, ease: [0.22, 0.61, 0.36, 1] }}
-              >
+              <li key={p.query}>
                 <button
                   type="button"
                   onClick={() => {
@@ -253,7 +196,7 @@ function HeroFull({
                   <span className="editorial-label">{p.label}</span>
                   <span className="editorial-arrow" aria-hidden>↗</span>
                 </button>
-              </motion.li>
+              </li>
             ))}
           </ol>
         </div>
@@ -267,20 +210,13 @@ function HeroFull({
           </div>
           <div className="capability-grid">
             {CAPABILITIES.map((c, i) => (
-              <motion.article
-                key={c.title}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.55, delay: i * 0.08, ease: [0.22, 0.61, 0.36, 1] }}
-                className="capability"
-              >
+              <article key={c.title} className="capability">
                 <span className="editorial-num" style={{ color: "var(--fg-3)" }}>
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <h3>{c.title}</h3>
                 <p>{c.body}</p>
-              </motion.article>
+              </article>
             ))}
           </div>
         </div>

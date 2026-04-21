@@ -596,46 +596,6 @@ body {
   min-height: 100vh;
 }
 
-.masthead {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.2rem clamp(1rem, 3.5vw, 2rem);
-  pointer-events: none;
-  color: rgba(255, 255, 255, 0.9);
-  mix-blend-mode: normal;
-}
-.masthead-brand {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-  color: #fff;
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.5);
-}
-.masthead-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
-}
-.masthead-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.55);
-}
-
 .hero {
   position: relative;
   min-height: 100vh;
@@ -647,71 +607,206 @@ body {
   isolation: isolate;
 }
 
-/* Radial scrim — centre stays clear (the Earth), edges darken for legibility */
+/* The hero background is the telescope housing — deep space colour,
+   no scrim. The reticle overlay handles all framing. */
 .hero-scrim {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(
-      ellipse at 50% 55%,
-      rgba(3, 5, 14, 0) 0%,
-      rgba(3, 5, 14, 0.32) 40%,
-      rgba(3, 5, 14, 0.86) 80%,
-      rgba(3, 5, 14, 0.96) 100%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(3, 5, 14, 0.35) 0%,
-      rgba(3, 5, 14, 0) 25%,
-      rgba(3, 5, 14, 0) 75%,
-      rgba(3, 5, 14, 0.75) 100%
-    );
+  background: #03050e;
   pointer-events: none;
   z-index: 0;
 }
 
-.hero-content {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 6rem 0 4rem;
-  width: 100%;
+/* ------------------------------------------------------------------
+   Telescope reticle overlay
+   ------------------------------------------------------------------ */
+
+.telescope {
+  position: fixed;
+  inset: 0;
+  z-index: 3; /* above globe (0) and hero (1), below foreground UI */
+  pointer-events: none;
+  color: rgba(220, 230, 255, 0.85);
+  font-family: var(--font-mono);
 }
 
-.hero-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.4rem 0.9rem;
-  margin-bottom: 2rem;
-  font-family: var(--font-body);
-  font-size: 13px;
-  letter-spacing: -0.005em;
-  color: rgba(255, 255, 255, 0.88);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
+/* Dark vignette everywhere except a central aperture — this is the
+   lens. The transparent hole is positioned centrally and sized as a
+   fraction of the shorter viewport dimension so the circle stays a
+   true circle on any aspect ratio. */
+.telescope-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(3, 5, 14, 0) 0%,
+    rgba(3, 5, 14, 0) 34%,
+    rgba(3, 5, 14, 0.4) 38%,
+    rgba(3, 5, 14, 0.85) 48%,
+    rgba(3, 5, 14, 0.97) 62%,
+    rgba(3, 5, 14, 1) 100%
+  );
 }
-.hero-kicker-dot {
+
+/* The reticle SVG is sized to the shorter viewport dimension so the
+   circle always matches the vignette aperture. */
+.telescope-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(82vmin, 82vh);
+  height: min(82vmin, 82vh);
+  opacity: 0.9;
+}
+
+.reticle-ring {
+  fill: none;
+  stroke: rgba(220, 230, 255, 0.38);
+  stroke-width: 1;
+}
+.reticle-ring-thin {
+  fill: none;
+  stroke: rgba(220, 230, 255, 0.12);
+  stroke-width: 0.5;
+}
+.reticle-tick-major {
+  stroke: rgba(220, 230, 255, 0.55);
+  stroke-width: 1.2;
+}
+.reticle-tick-minor {
+  stroke: rgba(220, 230, 255, 0.22);
+  stroke-width: 0.8;
+}
+.reticle-cardinal {
+  fill: rgba(220, 230, 255, 0.7);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+.reticle-cross {
+  stroke: rgba(220, 230, 255, 0.65);
+  stroke-width: 1;
+}
+.reticle-center {
+  fill: rgba(220, 230, 255, 0.9);
+}
+.reticle-dot {
+  fill: rgba(220, 230, 255, 0.28);
+}
+
+/* Corner brackets — L-shaped, set into the dark housing */
+.corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: rgba(220, 230, 255, 0.4);
+  border-style: solid;
+  border-width: 0;
+}
+.corner-tl { top: 22px; left: 22px;  border-top-width: 1px;    border-left-width: 1px; }
+.corner-tr { top: 22px; right: 22px; border-top-width: 1px;    border-right-width: 1px; }
+.corner-bl { bottom: 22px; left: 22px;  border-bottom-width: 1px; border-left-width: 1px; }
+.corner-br { bottom: 22px; right: 22px; border-bottom-width: 1px; border-right-width: 1px; }
+
+/* Instrument readouts in the dark housing */
+.telescope-readout {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(220, 230, 255, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+.telescope-readout-tl {
+  top: 48px;
+  left: 48px;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.telescope-readout-tr { top: 48px; right: 48px; text-align: right; }
+.telescope-readout-bl { bottom: 48px; left: 48px; }
+.telescope-readout-br { bottom: 48px; right: 48px; text-align: right; }
+
+.telescope-readout > div {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+.telescope-readout-tr > div,
+.telescope-readout-br > div {
+  justify-content: flex-end;
+}
+.readout-key {
+  color: rgba(220, 230, 255, 0.38);
+  min-width: 24px;
+}
+.readout-val {
+  color: rgba(220, 230, 255, 0.92);
+  font-weight: 500;
+}
+.readout-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8ab9ff;
-  box-shadow: 0 0 10px rgba(138, 185, 255, 0.9);
-  animation: kicker-pulse 2.4s ease-in-out infinite;
+  background: #ff5a5a;
+  box-shadow: 0 0 8px rgba(255, 90, 90, 0.8);
+  animation: telescope-live 1.4s ease-in-out infinite;
 }
-@keyframes kicker-pulse {
+@keyframes telescope-live {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.45; }
+  50%      { opacity: 0.35; }
+}
+
+/* Subtle scanlines — gives optical texture, easy on the eyes */
+.telescope-scan {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0px,
+    rgba(255, 255, 255, 0) 2px,
+    rgba(255, 255, 255, 0.015) 3px,
+    rgba(255, 255, 255, 0) 4px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+}
+
+/* Hero content: a single column that sits inside the dark housing
+   below the telescope aperture. The aperture occupies the top ~62% of
+   the viewport; the caption + input live in the bottom ~38% so neither
+   covers the Earth nor the reticle. */
+.hero-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: end;
+  justify-items: center;
+  padding: 0 clamp(1rem, 3.5vw, 2rem);
+  text-align: center;
+}
+.hero-caption {
+  align-self: end;
+  margin-bottom: 1.1rem;
 }
 
 .hero-headline {
   margin: 0 auto;
-  max-width: 15ch;
+  max-width: 18ch;
   color: #fff;
-  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.45);
+  font-size: clamp(2.4rem, 5.4vw, 4.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.6);
 }
 .hero-headline em {
   color: #9fc4ff;
@@ -719,19 +814,19 @@ body {
 }
 
 .hero-sub {
-  margin: 1.6rem auto 0;
-  max-width: 48ch;
+  margin: 0.9rem auto 0;
+  max-width: 54ch;
   font-family: var(--font-serif);
-  font-size: clamp(1.05rem, 1.35vw, 1.2rem);
-  line-height: 1.5;
-  letter-spacing: -0.008em;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(0.96rem, 1.05vw, 1.08rem);
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  color: rgba(220, 230, 255, 0.62);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
 }
 
 .hero-input-wrap {
-  margin: 2.6rem auto 0;
   width: min(720px, 92%);
+  margin-bottom: clamp(3rem, 7vh, 5rem);
 }
 .hero-input {
   display: flex;
@@ -800,33 +895,6 @@ body {
 .hero-input button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-
-.hero-scroll-hint {
-  position: absolute;
-  bottom: 2.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-}
-.hero-scroll-line {
-  width: 1px;
-  height: 28px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
-  animation: scroll-hint 2.2s ease-in-out infinite;
-  transform-origin: top;
-}
-@keyframes scroll-hint {
-  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
-  50%      { transform: scaleY(1);   opacity: 1; }
 }
 
 /* ------------------------------------------------------------------
@@ -1083,8 +1151,27 @@ body {
   color: rgba(159, 196, 255, 0.95);
 }
 
+.overlay-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
 .overlay-name {
   font-family: var(--font-body);
+  line-height: 1.3;
+}
+
+.overlay-sub {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.3;
+}
+.overlay-line.is-active .overlay-sub {
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .overlay-kind {

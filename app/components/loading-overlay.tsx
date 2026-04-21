@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PIPELINE, LLM_NODE_IDS } from "../lib/pipeline";
+import { CUSTOMER_PIPELINE } from "../lib/pipeline";
 import type { DemoResult } from "../lib/demo-results";
 
 type Props = {
@@ -24,8 +24,10 @@ type Props = {
  */
 export function LoadingOverlay({ query, result, onDone }: Props) {
   const [step, setStep] = useState(0);
-  const total = PIPELINE.length;
-  const perStep = Math.max(140, Math.round(result.tookMs / total));
+  const total = CUSTOMER_PIPELINE.length;
+  // Stretch a bit per step so the six-beat rhythm feels deliberate, not
+  // rushed — but never faster than the pretend-latency on the result.
+  const perStep = Math.max(260, Math.round(result.tookMs / total));
 
   useEffect(() => {
     let i = 0;
@@ -34,7 +36,7 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
       i += 1;
       if (i >= total) {
         window.clearInterval(tick);
-        window.setTimeout(onDone, 380);
+        window.setTimeout(onDone, 420);
         return;
       }
       setStep(i);
@@ -44,7 +46,7 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
   }, [result.id]);
 
   const progress = Math.min(1, (step + 1) / total);
-  const activeNode = PIPELINE[Math.min(step, total - 1)];
+  const activeStep = CUSTOMER_PIPELINE[Math.min(step, total - 1)];
 
   return (
     <motion.div
@@ -71,13 +73,12 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
 
         {/* Log stream — the "I'm thinking out loud" view */}
         <div className="overlay-log">
-          {PIPELINE.slice(0, step + 1).map((node, i) => {
+          {CUSTOMER_PIPELINE.slice(0, step + 1).map((s, i) => {
             const done = i < step;
             const active = i === step;
-            const isLLM = LLM_NODE_IDS.has(node.id);
             return (
               <motion.div
-                key={node.id}
+                key={s.id}
                 className={`overlay-line ${active ? "is-active" : ""} ${
                   done ? "is-done" : ""
                 }`}
@@ -88,15 +89,18 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
                 <span className="overlay-badge">
                   {done ? "✓" : active ? "" : "·"}
                 </span>
-                <span className="overlay-idx mono">{node.id}</span>
-                <span className="overlay-name">
-                  {node.processing.split(". ")[0]}.
+                <span className="overlay-idx mono">
+                  {String(i + 1).padStart(2, "0")}
                 </span>
+                <div className="overlay-copy">
+                  <span className="overlay-name">{s.label}</span>
+                  <span className="overlay-sub">{s.sublabel}</span>
+                </div>
                 <span
                   className="overlay-kind mono"
-                  data-touch={node.touch.toLowerCase()}
+                  data-touch={s.touch.toLowerCase()}
                 >
-                  {isLLM ? "LLM" : node.touch}
+                  {s.touch}
                 </span>
               </motion.div>
             );
@@ -115,7 +119,7 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
           </div>
           <span className="mono" style={{ color: "var(--fg-4)", fontSize: 11 }}>
             {String(step + 1).padStart(2, "0")} / {String(total).padStart(2, "0")} ·{" "}
-            {activeNode.name}
+            {activeStep.label}
           </span>
         </div>
       </motion.div>

@@ -7,6 +7,7 @@ import { Prompt } from "./components/prompt";
 import { Result } from "./components/result";
 import { LoadingOverlay } from "./components/loading-overlay";
 import { SmoothScroll } from "./components/smooth-scroll";
+import { TelescopeReticle } from "./components/telescope-reticle";
 import { matchQuery, type DemoResult } from "./lib/demo-results";
 
 // 3D Earth — client-only, deferred to keep TTFB clean
@@ -64,6 +65,11 @@ export default function Home() {
           over a live 3D background — not a blank white page. It only
           unmounts once we transition to the answer (done). */}
       {phase.kind !== "done" && <HeroGlobe />}
+
+      {/* Telescope HUD — aperture, reticle, corner brackets, live
+          instrument readouts. Rides on top of the globe but below any
+          foreground UI. Only shown while the hero is in view. */}
+      {phase.kind !== "done" && <TelescopeReticle />}
 
       {/* Landing hero stays underneath during loading too */}
       {phase.kind !== "done" && <Prompt onSubmit={handleAsk} />}
