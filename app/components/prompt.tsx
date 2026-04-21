@@ -1,32 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { EXAMPLE_PROMPTS } from "../lib/demo-results";
 
 type Props = {
   onSubmit: (q: string) => void;
-  compact?: boolean;      // renders the small top version once a result is visible
+  compact?: boolean;
   initialValue?: string;
 };
 
 /**
- * The one and only input surface. Two presentations:
- *   - compact:false  → giant centered hero (idle state)
- *   - compact:true   → slim top bar (result visible)
+ * The Prompt surface — hero + compact header share the same component.
+ *
+ * Hero (idle):
+ *   - Dark cinematic first viewport, Earth visible through the scrim.
+ *   - As the user scrolls, text dissolves and the globe takes the stage.
+ *   - Second viewport is white editorial paper with numbered propositions.
+ *
+ * Compact (a query is in flight or answered):
+ *   - A slim glass header pinned to the top of the answer screen.
  */
 export function Prompt({ onSubmit, compact, initialValue }: Props) {
   const [value, setValue] = useState(initialValue ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Autofocus the hero input on mount (desktop only — avoids mobile keyboard)
+  // Autofocus on desktop (not mobile — avoids keyboard jumping in)
   useEffect(() => {
-    if (compact) return;
-    if (!ref.current) return;
+    if (compact || !ref.current) return;
     const mq = window.matchMedia("(min-width: 768px)");
     if (mq.matches) ref.current.focus();
   }, [compact]);
 
-  // Sync with parent if parent changes initialValue (e.g., after Reset)
+  // Keep local value in sync when the parent pushes a new initial (Reset, etc.)
   useEffect(() => {
     setValue(initialValue ?? "");
   }, [initialValue]);
@@ -37,7 +43,6 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 240) + "px";
   };
-
   useEffect(() => {
     autoGrow();
   }, [value]);
@@ -57,28 +62,22 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
 
   if (compact) {
     return (
-      <div
+      <motion.div
         className="page"
-        style={{
-          paddingTop: "1.4rem",
-          paddingBottom: "1rem",
-        }}
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
+        style={{ paddingTop: "1.3rem", paddingBottom: "1rem" }}
       >
         <form
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
-          style={{
-            display: "flex",
-            gap: "0.6rem",
-            alignItems: "center",
-            background: "var(--bg-soft)",
-            border: "1px solid var(--line)",
-            borderRadius: 999,
-            padding: "0.35rem 0.35rem 0.35rem 1.1rem",
-          }}
+          className="compact-bar"
         >
+          <span className="compact-brand">Vantage</span>
+          <span className="compact-divider" />
           <textarea
             ref={ref}
             value={value}
@@ -87,186 +86,121 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
             rows={1}
             aria-label="Ask Earth anything"
             placeholder="Ask a new question…"
-            style={{
-              flex: 1,
-              resize: "none",
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "var(--fg-1)",
-              fontFamily: "var(--font-display)",
-              fontSize: 16,
-              letterSpacing: "-0.01em",
-              padding: "0.55rem 0",
-              maxHeight: 120,
-            }}
+            className="compact-input"
           />
           <button
             type="submit"
             className="btn btn-primary"
-            style={{ padding: "0.55rem 1.1rem" }}
+            style={{ padding: "0.5rem 1.1rem", fontSize: 14 }}
             disabled={!value.trim()}
           >
             Ask
           </button>
         </form>
-      </div>
+      </motion.div>
     );
   }
 
+  return <HeroFull value={value} setValue={setValue} submit={submit} onSubmit={onSubmit} inputRef={ref} onKeyDown={onKeyDown} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* The full hero.                                                      */
+/* ------------------------------------------------------------------ */
+
+function HeroFull({
+  value,
+  setValue,
+  submit,
+  onSubmit,
+  inputRef,
+  onKeyDown,
+}: {
+  value: string;
+  setValue: (v: string) => void;
+  submit: () => void;
+  onSubmit: (q: string) => void;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}) {
+  const { scrollY } = useScroll();
+  // Hero content dissolves as we scroll past it
+  const heroOpacity = useTransform(scrollY, [0, 240, 480], [1, 0.6, 0]);
+  const heroY = useTransform(scrollY, [0, 600], [0, -80]);
+  const heroBlur = useTransform(scrollY, [0, 500], [0, 6]);
+  const scrimOpacity = useTransform(scrollY, [0, 400], [1, 0.55]);
+
   return (
     <>
-      {/* Top masthead — editorial wordmark + standfirst */}
-      <header
-        className="page"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingTop: "1.6rem",
-          paddingBottom: "0.6rem",
-          borderBottom: "1px solid var(--line)",
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 14,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-            color: "var(--fg-1)",
-          }}
-        >
-          Vantage
+      {/* Masthead — fixed over the globe */}
+      <header className="masthead">
+        <span className="masthead-brand">Vantage</span>
+        <span className="masthead-meta">
+          <span>EARTH OBSERVATION</span>
+          <span className="masthead-dot" />
+          <span>VOLUME 01</span>
         </span>
-        <span className="eyebrow">Earth Observation · Volume 01</span>
       </header>
 
-      {/* Hero — asymmetric editorial. Headline flush-left, meta flush-right. */}
-      <section
-        className="page"
-        style={{
-          paddingTop: "clamp(3.5rem, 11vh, 7.5rem)",
-          paddingBottom: "clamp(2rem, 5vh, 3rem)",
-        }}
+      {/* Hero — full viewport, text over the 3D globe */}
+      <motion.section
+        className="hero"
+        style={{ opacity: heroOpacity, y: heroY, filter: useTransform(heroBlur, (b) => `blur(${b}px)`) }}
       >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.618fr) minmax(0, 1fr)",
-            columnGap: "clamp(1.5rem, 4vw, 3rem)",
-            rowGap: "2.4rem",
-            alignItems: "end",
-          }}
-        >
-          {/* Left: the headline. Serif, italic mid-word, left-aligned, huge. */}
-          <div>
-            <div className="eyebrow" style={{ marginBottom: "1.4rem" }}>
-              <span className="editorial-num">01.</span>{" "}
-              <span style={{ marginLeft: 6 }}>THE QUESTION</span>
-            </div>
-            <h1 className="display-serif" style={{ margin: 0, maxWidth: "14ch" }}>
-              Ask <em>Earth</em> anything.
-            </h1>
-          </div>
+        {/* Legibility scrim — radial dim around the centre so text stays crisp */}
+        <motion.div className="hero-scrim" style={{ opacity: scrimOpacity }} aria-hidden />
 
-          {/* Right: the standfirst, aligned to the bottom baseline of the headline. */}
-          <aside style={{ paddingBottom: "0.6rem" }}>
-            <p
-              style={{
-                margin: 0,
-                fontFamily: "var(--font-serif)",
-                fontSize: "clamp(1.05rem, 1.35vw, 1.2rem)",
-                lineHeight: 1.45,
-                color: "var(--fg-2)",
-                letterSpacing: "-0.01em",
-                maxWidth: "36ch",
-              }}
-            >
-              A chat-first interface to satellite imagery, vessel positions, and
-              the entity graph. Every answer carries its source.
-            </p>
-          </aside>
-        </div>
+        <div className="hero-content page">
+          <motion.div
+            className="hero-kicker"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            <span className="hero-kicker-dot" />
+            <span>A chat-first interface to Earth observation</span>
+          </motion.div>
 
-        {/* Thin rule — framing principle, separates the headline block from the input */}
-        <hr className="rule" style={{ marginTop: "clamp(2rem, 5vh, 3.5rem)" }} />
+          <motion.h1
+            className="display-serif hero-headline"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            Ask <em>Earth</em> anything.
+          </motion.h1>
 
-        {/* Input — left-aligned at full width, with the numbered examples as an
-            editorial list underneath, not a centered chip soup. */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          style={{
-            marginTop: "clamp(1.8rem, 4vh, 2.4rem)",
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.618fr) minmax(0, 1fr)",
-            columnGap: "clamp(1.5rem, 4vw, 3rem)",
-            rowGap: "1.6rem",
-            alignItems: "start",
-          }}
-        >
-          <div>
-            <label
-              className="eyebrow"
-              htmlFor="vantage-prompt"
-              style={{ display: "block", marginBottom: "0.7rem" }}
-            >
-              <span className="editorial-num">02.</span>{" "}
-              <span style={{ marginLeft: 6 }}>ENTER A PROMPT</span>
-            </label>
+          <motion.p
+            className="hero-sub"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            Satellite imagery, vessel positions, and the entity graph — resolved
+            through one prompt. Every answer carries its source, or it says so.
+          </motion.p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                alignItems: "flex-end",
-                background: "var(--bg-soft)",
-                border: "1px solid var(--line)",
-                borderRadius: 18,
-                padding: "0.9rem 0.9rem 0.9rem 1.25rem",
-                transition: "border-color var(--t-quick) var(--ease-apple)",
-              }}
-            >
+          <motion.form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="hero-input-wrap"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.65, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            <div className="hero-input">
               <textarea
-                id="vantage-prompt"
-                ref={ref}
+                ref={inputRef}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={onKeyDown}
                 rows={1}
                 aria-label="Ask Earth anything"
                 placeholder="e.g. Has construction at Mundra Port increased over the last 6 months?"
-                style={{
-                  flex: 1,
-                  resize: "none",
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  color: "var(--fg-1)",
-                  fontFamily: "var(--font-serif)",
-                  fontSize: 19,
-                  letterSpacing: "-0.012em",
-                  lineHeight: 1.4,
-                  padding: "0.25rem 0",
-                  maxHeight: 240,
-                }}
               />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                aria-label="Ask"
-                disabled={!value.trim()}
-                style={{
-                  height: 42,
-                  width: 42,
-                  padding: 0,
-                  borderRadius: 999,
-                  fontSize: 18,
-                }}
-              >
+              <button type="submit" aria-label="Ask" disabled={!value.trim()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M12 19V5M12 5l-6 6M12 5l6 6"
@@ -278,135 +212,95 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
                 </svg>
               </button>
             </div>
-          </div>
+          </motion.form>
 
-          {/* Right column: numbered example list, editorial, left-aligned */}
-          <div>
-            <div className="eyebrow" style={{ marginBottom: "0.7rem" }}>
-              <span className="editorial-num">03.</span>{" "}
-              <span style={{ marginLeft: 6 }}>OR PICK ONE</span>
-            </div>
-            <ol
-              style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 0,
-                borderTop: "1px solid var(--line)",
-              }}
-            >
-              {EXAMPLE_PROMPTS.map((p, i) => (
-                <li key={p.query} style={{ borderBottom: "1px solid var(--line)" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setValue(p.query);
-                      window.setTimeout(() => onSubmit(p.query), 60);
-                    }}
-                    style={{
-                      all: "unset",
-                      width: "100%",
-                      display: "grid",
-                      gridTemplateColumns: "auto 1fr auto",
-                      columnGap: "0.8rem",
-                      alignItems: "baseline",
-                      padding: "0.75rem 0.1rem",
-                      cursor: "pointer",
-                      color: "var(--fg-1)",
-                      transition: "color var(--t-quick) var(--ease-apple)",
-                      fontFamily: "var(--font-serif)",
-                      fontSize: 15,
-                      letterSpacing: "-0.008em",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.color = "var(--accent)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-1)";
-                    }}
-                  >
-                    <span className="editorial-num" style={{ color: "var(--fg-4)" }}>
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span>{p.label}</span>
-                    <span
-                      aria-hidden
-                      style={{ color: "var(--fg-4)", fontSize: 14, lineHeight: 1 }}
-                    >
-                      ↗
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </form>
-      </section>
-
-      {/* Second band — editorial "what it does". Numbered trio, serif
-          propositions, the same typographic vocabulary as the hero so the page
-          reads as one issue, not a landing page with a features grid. */}
-      <section
-        className="page"
-        style={{
-          paddingTop: "clamp(3rem, 8vh, 5rem)",
-          paddingBottom: "clamp(3rem, 8vh, 5rem)",
-          borderTop: "1px solid var(--line)",
-        }}
-      >
-        <div className="eyebrow" style={{ marginBottom: "2rem" }}>
-          WHAT VANTAGE ANSWERS
+          <motion.div
+            className="hero-scroll-hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1.1 }}
+          >
+            <span>scroll to explore</span>
+            <span className="hero-scroll-line" />
+          </motion.div>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            columnGap: "clamp(1.5rem, 4vw, 3rem)",
-            rowGap: "2.2rem",
-          }}
-        >
-          {CAPABILITIES.map((c, i) => (
-            <article key={c.title} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-              <span className="editorial-num" style={{ color: "var(--fg-3)" }}>
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <h3
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-serif)",
-                  fontSize: "clamp(1.35rem, 2vw, 1.65rem)",
-                  fontWeight: 500,
-                  letterSpacing: "-0.015em",
-                  lineHeight: 1.1,
-                  color: "var(--fg-1)",
-                }}
+      </motion.section>
+
+      {/* Examples band — on the white paper, scrolled into view */}
+      <section className="band band-white">
+        <div className="page band-inner">
+          <div className="eyebrow" style={{ marginBottom: "2rem" }}>
+            OR PICK ONE
+          </div>
+          <ol className="editorial-list">
+            {EXAMPLE_PROMPTS.map((p, i) => (
+              <motion.li
+                key={p.query}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.5, delay: i * 0.06, ease: [0.22, 0.61, 0.36, 1] }}
               >
-                {c.title}
-              </h3>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 14.5,
-                  lineHeight: 1.5,
-                  letterSpacing: "-0.008em",
-                  color: "var(--fg-3)",
-                  maxWidth: "32ch",
-                }}
-              >
-                {c.body}
-              </p>
-            </article>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue(p.query);
+                    window.setTimeout(() => onSubmit(p.query), 60);
+                  }}
+                  className="editorial-row"
+                >
+                  <span className="editorial-num">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="editorial-label">{p.label}</span>
+                  <span className="editorial-arrow" aria-hidden>↗</span>
+                </button>
+              </motion.li>
+            ))}
+          </ol>
         </div>
       </section>
+
+      {/* Capabilities band */}
+      <section className="band band-white">
+        <div className="page band-inner">
+          <div className="eyebrow" style={{ marginBottom: "2rem" }}>
+            WHAT VANTAGE ANSWERS
+          </div>
+          <div className="capability-grid">
+            {CAPABILITIES.map((c, i) => (
+              <motion.article
+                key={c.title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.55, delay: i * 0.08, ease: [0.22, 0.61, 0.36, 1] }}
+                className="capability"
+              >
+                <span className="editorial-num" style={{ color: "var(--fg-3)" }}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+              </motion.article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer ink */}
+      <footer className="band-footer">
+        <div className="page" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
+            © Vantage · prototype
+          </span>
+          <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
+            Every answer carries its source.
+          </span>
+        </div>
+      </footer>
     </>
   );
 }
 
-/** The three editorial propositions below the hero. Kept as data so the
- *  layout stays typographic, not prose. */
 const CAPABILITIES: Array<{ title: string; body: string }> = [
   {
     title: "Ports, in motion.",

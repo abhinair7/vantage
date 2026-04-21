@@ -1,8 +1,17 @@
 "use client";
 
 import { Fragment, useCallback, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import type { DemoResult } from "../lib/demo-results";
 import { MapView, type MapHandle } from "./map-view";
+
+/** Shared easing and stagger config — keep motion feeling like one system. */
+const EASE = [0.22, 0.61, 0.36, 1] as const;
+const reveal = (delay = 0) => ({
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.6, delay, ease: EASE },
+});
 
 type Props = {
   result: DemoResult;
@@ -52,7 +61,7 @@ export function Result({ result, onReset }: Props) {
 
   return (
     <section
-      className="page-wide fade-up"
+      className="page-wide"
       style={{
         paddingTop: "0.6rem",
         paddingBottom: "4rem",
@@ -64,8 +73,11 @@ export function Result({ result, onReset }: Props) {
       }}
     >
       {!isInsufficient && result.aoi && (
-        <div
+        <motion.div
           className="card card-lifted"
+          initial={{ opacity: 0, x: -24, scale: 0.99 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          transition={{ duration: 0.75, ease: EASE }}
           style={{
             minHeight: 560,
             position: "relative",
@@ -82,12 +94,12 @@ export function Result({ result, onReset }: Props) {
               window.setTimeout(() => setHoveredRef((v) => (v === id ? null : v)), 1400);
             }}
           />
-        </div>
+        </motion.div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.4rem" }}>
         {/* Headline + meta */}
-        <div>
+        <motion.div {...reveal(0.05)}>
           <div
             style={{
               display: "flex",
@@ -154,18 +166,20 @@ export function Result({ result, onReset }: Props) {
               marginTop: 0,
               letterSpacing: "-0.028em",
               color: "var(--fg-1)",
-              fontWeight: 600,
-              fontSize: 32,
-              lineHeight: 1.1,
+              fontFamily: "var(--font-serif)",
+              fontWeight: 500,
+              fontSize: 34,
+              lineHeight: 1.08,
             }}
           >
             {result.headline}
           </h2>
-        </div>
+        </motion.div>
 
         {/* Narrative with clickable citation chips */}
         {!isInsufficient && (
-          <div
+          <motion.div
+            {...reveal(0.18)}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -177,8 +191,11 @@ export function Result({ result, onReset }: Props) {
             }}
           >
             {result.narrative.map((chunk, i) => (
-              <p
+              <motion.p
                 key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.22 + i * 0.08, ease: EASE }}
                 style={{ margin: 0 }}
                 onMouseEnter={() => setHoveredRef(chunk.refs[0] ?? null)}
                 onMouseLeave={() => setHoveredRef(null)}
@@ -207,14 +224,15 @@ export function Result({ result, onReset }: Props) {
                     ))}
                   </>
                 )}
-              </p>
+              </motion.p>
             ))}
-          </div>
+          </motion.div>
         )}
 
         {/* Insufficient branch — single "we refused to guess" paragraph */}
         {isInsufficient && (
-          <p
+          <motion.p
+            {...reveal(0.15)}
             style={{
               margin: 0,
               color: "var(--fg-2)",
@@ -224,12 +242,12 @@ export function Result({ result, onReset }: Props) {
             }}
           >
             {result.narrative[0].text}
-          </p>
+          </motion.p>
         )}
 
         {/* Evidence ledger — rows are clickable and hoverable */}
         {!isInsufficient && result.evidence.length > 0 && (
-          <div className="card-tight" style={{ padding: "1rem 1.1rem" }}>
+          <motion.div {...reveal(0.35)} className="card-tight" style={{ padding: "1rem 1.1rem" }}>
             <div
               className="eyebrow"
               style={{
@@ -252,13 +270,16 @@ export function Result({ result, onReset }: Props) {
                 gap: "0.2rem",
               }}
             >
-              {result.evidence.map((e) => {
+              {result.evidence.map((e, i) => {
                 const isFocused = hoveredRef === e.id;
                 return (
-                  <button
+                  <motion.button
                     type="button"
                     key={e.id}
                     id={e.id}
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, delay: 0.5 + i * 0.05, ease: EASE }}
                     onClick={() => focusEvidence(e.id)}
                     onMouseEnter={() => setHoveredRef(e.id)}
                     onMouseLeave={() => setHoveredRef(null)}
@@ -314,15 +335,19 @@ export function Result({ result, onReset }: Props) {
                     >
                       {e.hash}
                     </span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Methodology */}
-        <details className="card-tight" style={{ padding: "0.9rem 1.1rem" }}>
+        <motion.details
+          {...reveal(0.55)}
+          className="card-tight"
+          style={{ padding: "0.9rem 1.1rem" }}
+        >
           <summary
             style={{
               cursor: "pointer",
@@ -356,9 +381,12 @@ export function Result({ result, onReset }: Props) {
               </li>
             ))}
           </ul>
-        </details>
+        </motion.details>
 
-        <div style={{ display: "flex", gap: "0.6rem", paddingTop: "0.4rem" }}>
+        <motion.div
+          {...reveal(0.65)}
+          style={{ display: "flex", gap: "0.6rem", paddingTop: "0.4rem" }}
+        >
           <button
             type="button"
             className="btn"
@@ -367,7 +395,7 @@ export function Result({ result, onReset }: Props) {
           >
             Ask another
           </button>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

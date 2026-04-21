@@ -1,42 +1,48 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
+import { AnimatePresence } from "framer-motion";
 import { Prompt } from "./components/prompt";
-import { Runner } from "./components/runner";
 import { Result } from "./components/result";
+import { LoadingOverlay } from "./components/loading-overlay";
+import { SmoothScroll } from "./components/smooth-scroll";
 import { matchQuery, type DemoResult } from "./lib/demo-results";
+
+// 3D Earth — client-only, deferred to keep TTFB clean
+const HeroGlobe = dynamic(
+  () => import("./components/hero-globe").then((m) => m.HeroGlobe),
+  { ssr: false }
+);
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "running"; query: string; pending: DemoResult }
+  | { kind: "loading"; query: string; pending: DemoResult }
   | { kind: "done"; query: string; result: DemoResult };
 
 /**
  * Vantage — the working prototype.
  *
- * State machine (one and only):
- *   idle → running (user hit "Ask")
- *   running → done (pipeline runner finished)
- *   done → idle   (user hit "Ask another")
+ * New flow (no dedicated "running" page):
+ *   idle     → user asks → loading overlay appears over the hero
+ *   loading  → pipeline animates → overlay dismisses
+ *   done     → result page fades in
  *
- * One question at a time. The pipeline is visible while it runs. The answer
- * carries its own evidence. If the matcher can't find a candidate above
- * threshold, `matchQuery` returns the insufficient-evidence fixture — which
- * is the product's correct behaviour, not an error state.
+ * The 3D globe lives in a fixed layer behind the content and is only
+ * rendered while we're on the idle screen — once there's an answer, the
+ * viewport belongs to the map and we don't want two GPU surfaces fighting.
  */
 export default function Home() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 
   const handleAsk = useCallback((query: string) => {
     const pending = matchQuery(query);
-    // If the pending result has no query baked in (insufficient fallback) it gets
-    // populated by matchQuery; otherwise the fixture's canonical query wins.
-    setPhase({ kind: "running", query, pending });
+    setPhase({ kind: "loading", query, pending });
   }, []);
 
-  const handleRunnerDone = useCallback(() => {
+  const handleLoadingDone = useCallback(() => {
     setPhase((p) =>
-      p.kind === "running"
+      p.kind === "loading"
         ? { kind: "done", query: p.query, result: p.pending }
         : p
     );
@@ -44,29 +50,43 @@ export default function Home() {
 
   const handleReset = useCallback(() => {
     setPhase({ kind: "idle" });
+    // Return to the top so the hero scroll animation replays naturally
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, []);
 
   return (
-    <main>
-      {phase.kind === "idle" && <Prompt onSubmit={handleAsk} />}
+    <main className="vantage-root">
+      <SmoothScroll />
 
-      {phase.kind === "running" && (
-        <>
-          <Prompt compact onSubmit={handleAsk} initialValue={phase.query} />
-          <Runner
-            query={phase.query}
-            result={phase.pending}
-            onDone={handleRunnerDone}
-          />
-        </>
-      )}
+      {/* Earth renders for idle AND loading, so the overlay popup floats
+          over a live 3D background — not a blank white page. It only
+          unmounts once we transition to the answer (done). */}
+      {phase.kind !== "done" && <HeroGlobe />}
 
+      {/* Landing hero stays underneath during loading too */}
+      {phase.kind !== "done" && <Prompt onSubmit={handleAsk} />}
+
+      {/* Answer screen */}
       {phase.kind === "done" && (
         <>
           <Prompt compact onSubmit={handleAsk} initialValue={phase.query} />
           <Result result={phase.result} onReset={handleReset} />
         </>
       )}
+
+      {/* Pipeline overlay — shown on top of everything while loading */}
+      <AnimatePresence>
+        {phase.kind === "loading" && (
+          <LoadingOverlay
+            key="loading-overlay"
+            query={phase.query}
+            result={phase.pending}
+            onDone={handleLoadingDone}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }
