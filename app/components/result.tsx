@@ -61,28 +61,51 @@ export function Result({ result, onReset }: Props) {
 
   return (
     <section
-      className="page-wide"
+      className="page-wide result-shell"
       style={{
-        paddingTop: "0.6rem",
+        paddingTop: "0.2rem",
         paddingBottom: "4rem",
-        display: "grid",
-        gridTemplateColumns: isInsufficient
-          ? "1fr"
-          : "minmax(0, 1.618fr) minmax(0, 1fr)",
-        gap: "2rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.6rem",
+        maxWidth: 960,
+        margin: "0 auto",
       }}
     >
+      <motion.button
+        type="button"
+        onClick={onReset}
+        className="result-back"
+        initial={{ opacity: 0, x: -8 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, ease: EASE }}
+        aria-label="Back to search"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path
+            d="M15 19l-7-7 7-7"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span>Back</span>
+      </motion.button>
+
       {!isInsufficient && result.aoi && (
         <motion.div
-          className="card card-lifted"
-          initial={{ opacity: 0, x: -24, scale: 0.99 }}
-          animate={{ opacity: 1, x: 0, scale: 1 }}
-          transition={{ duration: 0.75, ease: EASE }}
+          className="card card-lifted result-map"
+          initial={{ opacity: 0, y: 10, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.65, ease: EASE }}
           style={{
-            minHeight: 560,
             position: "relative",
             padding: 0,
             overflow: "hidden",
+            aspectRatio: "16 / 9",
+            maxHeight: 360,
+            width: "100%",
           }}
         >
           <MapView
@@ -245,20 +268,28 @@ export function Result({ result, onReset }: Props) {
           </motion.p>
         )}
 
-        {/* Evidence ledger — rows are clickable and hoverable */}
+        {/* Evidence ledger — compact reference strip */}
         {!isInsufficient && result.evidence.length > 0 && (
-          <motion.div {...reveal(0.35)} className="card-tight" style={{ padding: "1rem 1.1rem" }}>
+          <motion.div {...reveal(0.35)} style={{ marginTop: "0.4rem" }}>
             <div
               className="eyebrow"
               style={{
                 color: "var(--fg-4)",
-                marginBottom: "0.75rem",
+                marginBottom: "0.55rem",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                gap: "0.6rem",
               }}
             >
-              <span>EVIDENCE LEDGER</span>
+              <span>SOURCES</span>
+              <span
+                aria-hidden
+                style={{
+                  flex: 1,
+                  height: 1,
+                  background: "var(--line)",
+                }}
+              />
               <span style={{ color: "var(--fg-4)" }}>
                 {result.evidence.length}
               </span>
@@ -266,8 +297,8 @@ export function Result({ result, onReset }: Props) {
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.2rem",
+                flexWrap: "wrap",
+                gap: "0.35rem",
               }}
             >
               {result.evidence.map((e, i) => {
@@ -277,63 +308,38 @@ export function Result({ result, onReset }: Props) {
                     type="button"
                     key={e.id}
                     id={e.id}
-                    initial={{ opacity: 0, x: 12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.5 + i * 0.05, ease: EASE }}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.45 + i * 0.04, ease: EASE }}
                     onClick={() => focusEvidence(e.id)}
                     onMouseEnter={() => setHoveredRef(e.id)}
                     onMouseLeave={() => setHoveredRef(null)}
+                    title={`${e.claim} — ${e.source}`}
                     style={{
                       all: "unset",
-                      display: "grid",
-                      gridTemplateColumns: "auto 1fr auto",
-                      gap: "0.8rem",
-                      alignItems: "baseline",
-                      padding: "0.55rem 0.7rem",
-                      borderRadius: 8,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.28rem 0.55rem 0.28rem 0.35rem",
+                      borderRadius: 999,
                       cursor: "pointer",
-                      background: isFocused ? "rgba(0, 113, 227, 0.06)" : "transparent",
+                      fontSize: 11.5,
+                      color: isFocused ? "var(--fg-1)" : "var(--fg-3)",
+                      background: isFocused ? "rgba(0, 113, 227, 0.10)" : "rgba(255, 255, 255, 0.03)",
                       boxShadow: isFocused
-                        ? "inset 0 0 0 1px rgba(0, 113, 227, 0.25)"
-                        : "inset 0 0 0 1px transparent",
+                        ? "inset 0 0 0 1px rgba(0, 113, 227, 0.35)"
+                        : "inset 0 0 0 1px var(--line)",
                       transition:
-                        "background var(--t-quick) var(--ease-apple), box-shadow var(--t-quick) var(--ease-apple)",
+                        "background var(--t-quick) var(--ease-apple), box-shadow var(--t-quick) var(--ease-apple), color var(--t-quick) var(--ease-apple)",
                     }}
                   >
-                    <span
-                      className="evidence-ref"
-                      style={{ alignSelf: "start", marginTop: 2 }}
-                    >
-                      {e.id}
+                    <span className="evidence-ref">{e.id}</span>
+                    <span className="mono" style={{ fontSize: 10.5 }}>
+                      {e.kind.toUpperCase()}
                     </span>
-                    <div>
-                      <div
-                        style={{
-                          color: "var(--fg-1)",
-                          fontSize: 14,
-                          letterSpacing: "-0.01em",
-                          marginBottom: 2,
-                        }}
-                      >
-                        {e.claim}
-                      </div>
-                      <div
-                        className="mono"
-                        style={{ fontSize: 11, color: "var(--fg-4)" }}
-                      >
-                        {e.kind.toUpperCase()} · {e.source}
-                      </div>
-                    </div>
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: 10.5,
-                        color: "var(--fg-4)",
-                        whiteSpace: "nowrap",
-                      }}
-                      title="source content hash"
-                    >
-                      {e.hash}
+                    <span style={{ color: "var(--fg-4)" }}>·</span>
+                    <span style={{ letterSpacing: "-0.005em" }}>
+                      {shortSource(e.source)}
                     </span>
                   </motion.button>
                 );
@@ -342,60 +348,6 @@ export function Result({ result, onReset }: Props) {
           </motion.div>
         )}
 
-        {/* Methodology */}
-        <motion.details
-          {...reveal(0.55)}
-          className="card-tight"
-          style={{ padding: "0.9rem 1.1rem" }}
-        >
-          <summary
-            style={{
-              cursor: "pointer",
-              listStyle: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              color: "var(--fg-2)",
-              fontSize: 14,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            <span>How this was computed</span>
-            <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
-              +
-            </span>
-          </summary>
-          <ul
-            style={{
-              margin: "0.8rem 0 0",
-              paddingLeft: "1.1rem",
-              color: "var(--fg-3)",
-              fontSize: 14,
-              lineHeight: 1.55,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {result.methodology.map((m, i) => (
-              <li key={i} style={{ marginBottom: "0.3rem" }}>
-                {m}
-              </li>
-            ))}
-          </ul>
-        </motion.details>
-
-        <motion.div
-          {...reveal(0.65)}
-          style={{ display: "flex", gap: "0.6rem", paddingTop: "0.4rem" }}
-        >
-          <button
-            type="button"
-            className="btn"
-            onClick={onReset}
-            style={{ fontSize: 14 }}
-          >
-            Ask another
-          </button>
-        </motion.div>
       </div>
     </section>
   );

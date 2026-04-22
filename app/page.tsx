@@ -57,8 +57,10 @@ export default function Home() {
     }
   }, []);
 
+  const isDone = phase.kind === "done";
+
   return (
-    <main className="vantage-root">
+    <main className={`vantage-root${isDone ? " is-result" : ""}`}>
       <SmoothScroll />
 
       {/* Earth renders for idle AND loading, so the overlay popup floats

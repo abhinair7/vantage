@@ -15,7 +15,17 @@ import { useEffect, useRef, useState } from "react";
 export function TelescopeReticle() {
   const [progress, setProgress] = useState(0);
   const [utc, setUtc] = useState("");
+  const [mounted, setMounted] = useState(false);
   const tickRef = useRef<number>(0);
+
+  // SSR serializes JS floats at full precision; Node.js and V8-in-Chrome
+  // disagree on trailing digits for some trig outputs, which produced a
+  // mountain of hydration mismatches on every reticle tick. Deferring
+  // the whole SVG to after mount makes the client the single source of
+  // truth for those numbers.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Scroll → instrument readings
   useEffect(() => {
@@ -48,6 +58,16 @@ export function TelescopeReticle() {
   // Fictional AOI centroid that drifts very slightly with scroll so it feels live
   const lat = (22.7345 + Math.sin(progress * 4.1) * 0.0021).toFixed(4);
   const lon = (69.7071 + Math.cos(progress * 3.4) * 0.0026).toFixed(4);
+
+  if (!mounted) {
+    // The vignette is safe to SSR (no float math); the reticle and
+    // instrument readouts are deferred until the client takes over.
+    return (
+      <div className="telescope" aria-hidden>
+        <div className="telescope-vignette" />
+      </div>
+    );
+  }
 
   return (
     <div className="telescope" aria-hidden>

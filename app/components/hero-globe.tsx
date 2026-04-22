@@ -1,117 +1,135 @@
 "use client";
 
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Stars } from "@react-three/drei";
-import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
-import { useRef, useEffect, useState, type MutableRefObject } from "react";
+import { useMemo, useRef, useEffect, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
 
 /**
  * Hero 3D Earth.
  *
- * Sits in a fixed, pointer-events:none layer behind the hero content.
  * A single ref (scrollProgressRef) is mutated by a passive scroll listener
- * and read every frame inside the Canvas — no React state churn, no
- * re-renders, the GPU just stays hot.
+ * and read every frame inside the Canvas — no React state churn.
  *
- *   scrollProgress ∈ [0, 1]
- *     0  = top of page, camera at z=3.4, earth small and slow
- *     1  = scrolled one viewport, camera at z=1.9, earth fills the view
- *
- * Reduced-motion users get a still frame — no rotation, no dolly.
+ * On mount the camera starts pulled way back (the "looking through a
+ * telescope" phase) and eases forward toward the planet over ~2.4s while
+ * the DOM telescope overlay fades its vignette out. The two layers are
+ * choreographed through a shared `introStart` timestamp baked into window.
  */
 
 type ProgressRef = MutableRefObject<number>;
 
-function Earth({ progress }: { progress: ProgressRef }) {
+type EarthTextures = {
+  colorMap: THREE.Texture;
+  normalMap: THREE.Texture;
+  specularMap: THREE.Texture;
+  cloudsMap: THREE.Texture;
+};
+
+function useEarthTextures(): EarthTextures | null {
+  const [textures, setTextures] = useState<EarthTextures | null>(null);
+
+  useEffect(() => {
+    const loader = new TextureLoader();
+    const load = (url: string) =>
+      new Promise<THREE.Texture>((resolve, reject) =>
+        loader.load(url, resolve, undefined, reject)
+      );
+
+    let cancelled = false;
+    Promise.all([
+      load("/textures/earth-day.jpg"),
+      load("/textures/earth-normal.jpg"),
+      load("/textures/earth-specular.jpg"),
+      load("/textures/earth-clouds.png"),
+    ])
+      .then(([colorMap, normalMap, specularMap, cloudsMap]) => {
+        if (cancelled) return;
+        colorMap.colorSpace = THREE.SRGBColorSpace;
+        cloudsMap.colorSpace = THREE.SRGBColorSpace;
+        colorMap.anisotropy = 8;
+        normalMap.anisotropy = 8;
+        setTextures({ colorMap, normalMap, specularMap, cloudsMap });
+      })
+      .catch((err) => {
+        console.error("[HeroGlobe] texture load failed", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return textures;
+}
+
+function Earth({
+  progress,
+  textures,
+}: {
+  progress: ProgressRef;
+  textures: EarthTextures;
+}) {
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
   const groupRef = useRef<THREE.Group>(null);
+  const mountAt = useRef<number | null>(null);
+  const { colorMap, normalMap, specularMap, cloudsMap } = textures;
+  const specularColor = useMemo(() => new THREE.Color(0x1f3450), []);
+  const normalScale = useMemo(() => new THREE.Vector2(0.55, 0.55), []);
 
-  const [colorMap, normalMap, specularMap, cloudsMap] = useLoader(TextureLoader, [
-    "/textures/earth-day.jpg",
-    "/textures/earth-normal.jpg",
-    "/textures/earth-specular.jpg",
-    "/textures/earth-clouds.png",
-  ]);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (mountAt.current == null) mountAt.current = t;
+    const elapsed = t - mountAt.current;
 
-  // Upgrade colour fidelity for the day texture
-  useEffect(() => {
-    colorMap.colorSpace = THREE.SRGBColorSpace;
-    cloudsMap.colorSpace = THREE.SRGBColorSpace;
-  }, [colorMap, cloudsMap]);
-
-  useFrame((state, delta) => {
+    // Slow, even rotation — clock-derived so a backgrounded tab cannot
+    // accumulate delta jitter into the angle.
     if (earthRef.current) {
-      earthRef.current.rotation.y += delta * (0.04 + progress.current * 0.05);
+      earthRef.current.rotation.y = elapsed * 0.055;
     }
     if (cloudsRef.current) {
-      cloudsRef.current.rotation.y += delta * (0.06 + progress.current * 0.07);
-      cloudsRef.current.rotation.x += delta * 0.002;
+      cloudsRef.current.rotation.y = elapsed * 0.072;
     }
     if (groupRef.current) {
-      // Gentle breathing float
-      const t = state.clock.elapsedTime;
-      groupRef.current.position.y = Math.sin(t * 0.4) * 0.03;
-      groupRef.current.rotation.z = Math.sin(t * 0.3) * 0.015;
+      // Hold the planet rock-steady; vertical drift was reading as a
+      // "glitch" against the static reticle overlay.
+      groupRef.current.position.y = 0;
     }
-    // Camera dolly tied to scroll
-    state.camera.position.z = 3.4 - progress.current * 1.5;
+
+    // Cinematic dolly: start far away (z=14) and ease in to z=5.4. This is
+    // the "camera walking up to the eyepiece" moment. Scroll can pull the
+    // camera an extra 1.8 units closer once the intro has finished.
+    const introT = Math.min(1, elapsed / 2.4);
+    const introEase = 1 - Math.pow(1 - introT, 3);
+    const dollyFrom = 14;
+    const dollyTo = 5.4;
+    const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.8;
+    state.camera.position.z = z;
   });
 
   return (
     <group ref={groupRef}>
-      {/* Main Earth */}
       <mesh ref={earthRef}>
-        <sphereGeometry args={[1, 96, 96]} />
+        <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
           map={colorMap}
           normalMap={normalMap}
           specularMap={specularMap}
-          specular={new THREE.Color(0x4488bb)}
-          shininess={14}
-          normalScale={new THREE.Vector2(0.8, 0.8)}
+          specular={specularColor}
+          shininess={6}
+          normalScale={normalScale}
         />
       </mesh>
 
-      {/* Cloud layer */}
-      <mesh ref={cloudsRef} scale={1.006}>
-        <sphereGeometry args={[1, 64, 64]} />
+      <mesh ref={cloudsRef} scale={1.008}>
+        <sphereGeometry args={[1, 96, 96]} />
         <meshPhongMaterial
           map={cloudsMap}
           transparent
-          opacity={0.42}
+          opacity={0.28}
           depthWrite={false}
-        />
-      </mesh>
-
-      {/* Atmospheric glow — a slightly larger sphere with additive blending */}
-      <mesh scale={1.08}>
-        <sphereGeometry args={[1, 64, 64]} />
-        <shaderMaterial
-          transparent
-          blending={THREE.AdditiveBlending}
-          side={THREE.BackSide}
-          depthWrite={false}
-          uniforms={{
-            uColor: { value: new THREE.Color("#6aa9ff") },
-          }}
-          vertexShader={`
-            varying vec3 vNormal;
-            void main() {
-              vNormal = normalize(normalMatrix * normal);
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `}
-          fragmentShader={`
-            varying vec3 vNormal;
-            uniform vec3 uColor;
-            void main() {
-              float intensity = pow(0.62 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.2);
-              gl_FragColor = vec4(uColor, 1.0) * intensity;
-            }
-          `}
         />
       </mesh>
     </group>
@@ -121,6 +139,7 @@ function Earth({ progress }: { progress: ProgressRef }) {
 export function HeroGlobe() {
   const progress = useRef(0);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const textures = useEarthTextures();
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -142,40 +161,33 @@ export function HeroGlobe() {
         inset: 0,
         zIndex: 0,
         pointerEvents: "none",
+        background:
+          "radial-gradient(ellipse at 50% 38%, #0a1022 0%, #050814 55%, #02040b 100%)",
       }}
     >
       <Canvas
-        camera={{ position: [0, 0, 3.4], fov: 42 }}
+        camera={{ position: [0, 0, 14], fov: 38 }}
         dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.18} />
-        <directionalLight position={[5, 2, 4]} intensity={1.6} color="#ffffff" />
-        <directionalLight position={[-4, -1, -3]} intensity={0.15} color="#3358aa" />
+        <ambientLight intensity={0.62} />
+        <directionalLight position={[5, 2, 4]} intensity={1.55} color="#ffffff" />
+        <directionalLight position={[-3, 1, 3]} intensity={0.65} color="#e9f2ff" />
+        <directionalLight position={[-4, -1, -3]} intensity={0.22} color="#3358aa" />
 
         <Stars
-          radius={100}
+          radius={110}
           depth={60}
-          count={4500}
-          factor={3.2}
+          count={2400}
+          factor={2.6}
           saturation={0}
           fade
-          speed={reducedMotion ? 0 : 0.35}
+          speed={reducedMotion ? 0 : 0.25}
         />
 
-        <Earth progress={progress} />
-
-        <EffectComposer>
-          <Bloom
-            intensity={0.35}
-            luminanceThreshold={0.7}
-            luminanceSmoothing={0.3}
-            mipmapBlur
-          />
-          <Vignette eskil={false} offset={0.22} darkness={0.9} />
-        </EffectComposer>
+        {textures && <Earth progress={progress} textures={textures} />}
       </Canvas>
     </div>
   );
