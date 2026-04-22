@@ -10,23 +10,7 @@ type Props = {
   initialValue?: string;
 };
 
-const SIGNAL_CARDS = [
-  {
-    title: "Satellite First",
-    body: "Ground truth before the memo.",
-    meta: "EO · SAR · Thermal",
-  },
-  {
-    title: "Entity Graph",
-    body: "Operators, parents, counterparties.",
-    meta: "Registry · Wikidata · OSM",
-  },
-  {
-    title: "Decision Brief",
-    body: "What matters, what does not, and what to do next.",
-    meta: "Impact · Confidence · Action",
-  },
-];
+
 
 /**
  * The Prompt surface — hero + compact header share the same component.
@@ -160,19 +144,6 @@ function HeroFull({
   return (
     <section className="hero">
       <div className="hero-scrim" aria-hidden />
-
-      <div className="hero-signal-cloud" aria-hidden>
-        {SIGNAL_CARDS.map((card, index) => (
-          <article
-            key={card.title}
-            className={`hero-signal-card hero-signal-card-${index + 1}`}
-          >
-            <span className="hero-signal-meta">{card.meta}</span>
-            <h3>{card.title}</h3>
-            <p>{card.body}</p>
-          </article>
-        ))}
-      </div>
 
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">

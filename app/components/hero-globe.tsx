@@ -163,53 +163,7 @@ function Earth({
         />
       </mesh>
 
-      <OrbitSignals />
     </group>
-  );
-}
-
-function OrbitSignals() {
-  const firstRing = useRef<THREE.Group>(null);
-  const secondRing = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    if (firstRing.current) {
-      firstRing.current.rotation.x = 0.68;
-      firstRing.current.rotation.y = t * 0.16;
-      firstRing.current.rotation.z = 0.12;
-    }
-    if (secondRing.current) {
-      secondRing.current.rotation.x = -0.58;
-      secondRing.current.rotation.y = -t * 0.11;
-      secondRing.current.rotation.z = 0.24;
-    }
-  });
-
-  return (
-    <>
-      <group ref={firstRing}>
-        <mesh>
-          <torusGeometry args={[1.42, 0.0038, 16, 180]} />
-          <meshBasicMaterial color="#76beff" transparent opacity={0.24} />
-        </mesh>
-        <mesh position={[1.42, 0, 0]}>
-          <sphereGeometry args={[0.03, 16, 16]} />
-          <meshBasicMaterial color="#dff4ff" />
-        </mesh>
-      </group>
-
-      <group ref={secondRing}>
-        <mesh>
-          <torusGeometry args={[1.58, 0.0032, 16, 180]} />
-          <meshBasicMaterial color="#6acbff" transparent opacity={0.18} />
-        </mesh>
-        <mesh position={[-1.58, 0, 0]}>
-          <sphereGeometry args={[0.024, 16, 16]} />
-          <meshBasicMaterial color="#98ddff" />
-        </mesh>
-      </group>
-    </>
   );
 }
 
