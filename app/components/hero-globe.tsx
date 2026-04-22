@@ -1,21 +1,17 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Stars } from "@react-three/drei";
+import { Canvas, useFrame, extend } from "@react-three/fiber";
+import { Stars, shaderMaterial } from "@react-three/drei";
 import { useMemo, useRef, useEffect, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
 
 /**
- * Hero 3D Earth.
+ * Hero 3D Earth — IMAX cinematic.
  *
- * A single ref (scrollProgressRef) is mutated by a passive scroll listener
- * and read every frame inside the Canvas — no React state churn.
- *
- * On mount the camera starts pulled way back (the "looking through a
- * telescope" phase) and eases forward toward the planet over ~2.4s while
- * the DOM telescope overlay fades its vignette out. The two layers are
- * choreographed through a shared `introStart` timestamp baked into window.
+ * Clean planet, no gimmicks. Fresnel atmosphere scattering on the limb,
+ * high-detail normals, three-point lighting. The camera starts far back
+ * (looking through telescope aperture) and dollies in over ~3s.
  */
 
 type ProgressRef = MutableRefObject<number>;
@@ -28,6 +24,51 @@ type EarthTextures = {
 };
 
 type PointerRef = MutableRefObject<{ x: number; y: number }>;
+
+/* ---------- Fresnel atmosphere shader ---------- */
+const AtmosphereMaterial = shaderMaterial(
+  {
+    glowColor: new THREE.Color(0x4da6ff),
+    viewVector: new THREE.Vector3(0, 0, 5),
+    intensity: 1.2,
+    power: 3.5,
+  },
+  /* vertex */
+  `
+    uniform vec3 viewVector;
+    varying float vIntensity;
+    void main() {
+      vec3 vNormal = normalize(normalMatrix * normal);
+      vec3 vNormel = normalize(normalMatrix * viewVector);
+      vIntensity = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 3.5);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  /* fragment */
+  `
+    uniform vec3 glowColor;
+    uniform float intensity;
+    varying float vIntensity;
+    void main() {
+      vec3 glow = glowColor * intensity;
+      gl_FragColor = vec4(glow, vIntensity * 0.65);
+    }
+  `
+);
+
+extend({ AtmosphereMaterial });
+
+// Type augmentation for R3F custom element
+declare module "@react-three/fiber" {
+  interface ThreeElements {
+    atmosphereMaterial: React.JSX.IntrinsicElements["shaderMaterial"] & {
+      glowColor?: THREE.Color;
+      viewVector?: THREE.Vector3;
+      intensity?: number;
+      power?: number;
+    };
+  }
+}
 
 function useEarthTextures(): EarthTextures | null {
   const [textures, setTextures] = useState<EarthTextures | null>(null);
@@ -78,55 +119,64 @@ function Earth({
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
   const groupRef = useRef<THREE.Group>(null);
+  const atmosRef = useRef<THREE.Mesh>(null);
   const mountAt = useRef<number | null>(null);
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
-  const specularColor = useMemo(() => new THREE.Color(0x1f3450), []);
-  const normalScale = useMemo(() => new THREE.Vector2(0.55, 0.55), []);
-  const emissiveColor = useMemo(() => new THREE.Color(0x0a2b6d), []);
+  const specularColor = useMemo(() => new THREE.Color(0x336699), []);
+  const normalScale = useMemo(() => new THREE.Vector2(0.85, 0.85), []);
+  const emissiveColor = useMemo(() => new THREE.Color(0x061a42), []);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (mountAt.current == null) mountAt.current = t;
     const elapsed = t - mountAt.current;
 
-    // Slow, even rotation — clock-derived so a backgrounded tab cannot
-    // accumulate delta jitter into the angle.
+    // Slow rotation
     if (earthRef.current) {
-      earthRef.current.rotation.y = elapsed * 0.055;
+      earthRef.current.rotation.y = elapsed * 0.045;
     }
     if (cloudsRef.current) {
-      cloudsRef.current.rotation.y = elapsed * 0.072;
+      cloudsRef.current.rotation.y = elapsed * 0.062;
     }
     if (groupRef.current) {
-      groupRef.current.position.y = pointer.current.y * 0.06;
-      groupRef.current.rotation.x = -pointer.current.y * 0.08;
-      groupRef.current.rotation.z = pointer.current.x * 0.05;
+      groupRef.current.position.y = pointer.current.y * 0.04;
+      groupRef.current.rotation.x = -pointer.current.y * 0.06;
+      groupRef.current.rotation.z = pointer.current.x * 0.035;
     }
 
-    // Cinematic dolly: start far away (z=14) and ease in to z=5.4. This is
-    // the "camera walking up to the eyepiece" moment. Scroll can pull the
-    // camera an extra 1.8 units closer once the intro has finished.
-    const introT = Math.min(1, elapsed / 2.4);
-    const introEase = 1 - Math.pow(1 - introT, 3);
-    const dollyFrom = 14;
-    const dollyTo = 4.8;
-    const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.8;
+    // Update atmosphere view vector for Fresnel
+    if (atmosRef.current) {
+      const mat = atmosRef.current.material as THREE.ShaderMaterial & {
+        uniforms: { viewVector: { value: THREE.Vector3 } };
+      };
+      if (mat.uniforms?.viewVector) {
+        mat.uniforms.viewVector.value.copy(state.camera.position);
+      }
+    }
+
+    // Cinematic dolly — 3s ease-in from far to close
+    const introT = Math.min(1, elapsed / 3.0);
+    const introEase = 1 - Math.pow(1 - introT, 4); // quartic ease-out
+    const dollyFrom = 16;
+    const dollyTo = 4.2;
+    const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.6;
     state.camera.position.z = z;
     state.camera.position.x = THREE.MathUtils.lerp(
       state.camera.position.x,
-      pointer.current.x * 0.4,
-      0.05,
+      pointer.current.x * 0.3,
+      0.04,
     );
     state.camera.position.y = THREE.MathUtils.lerp(
       state.camera.position.y,
-      pointer.current.y * 0.24,
-      0.05,
+      pointer.current.y * 0.18,
+      0.04,
     );
     state.camera.lookAt(0, 0, 0);
   });
 
   return (
     <group ref={groupRef}>
+      {/* Earth surface */}
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -134,35 +184,36 @@ function Earth({
           normalMap={normalMap}
           specularMap={specularMap}
           specular={specularColor}
-          shininess={14}
+          shininess={22}
           normalScale={normalScale}
           emissive={emissiveColor}
-          emissiveIntensity={0.24}
+          emissiveIntensity={0.18}
         />
       </mesh>
 
-      <mesh ref={cloudsRef} scale={1.008}>
+      {/* Cloud layer */}
+      <mesh ref={cloudsRef} scale={1.006}>
         <sphereGeometry args={[1, 96, 96]} />
         <meshPhongMaterial
           map={cloudsMap}
           transparent
-          opacity={0.28}
+          opacity={0.22}
           depthWrite={false}
         />
       </mesh>
 
-      <mesh scale={1.08}>
-        <sphereGeometry args={[1, 96, 96]} />
-        <meshBasicMaterial
-          color="#63b0ff"
+      {/* Fresnel atmospheric scattering — thin blue glow on the limb */}
+      <mesh ref={atmosRef} scale={1.035}>
+        <sphereGeometry args={[1, 64, 64]} />
+        <atmosphereMaterial
           transparent
-          opacity={0.17}
-          blending={THREE.AdditiveBlending}
-          side={THREE.BackSide}
+          side={THREE.FrontSide}
           depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          glowColor={new THREE.Color(0x4da6ff)}
+          intensity={1.1}
         />
       </mesh>
-
     </group>
   );
 }
@@ -204,35 +255,40 @@ export function HeroGlobe() {
         zIndex: 0,
         pointerEvents: "none",
         background:
-          "radial-gradient(ellipse at 50% 36%, #11244d 0%, #071225 42%, #02040b 100%)",
+          "radial-gradient(ellipse at 50% 36%, #0d1d3d 0%, #060e1f 40%, #020408 100%)",
       }}
     >
       <Canvas
-        camera={{ position: [0, 0, 14], fov: 38 }}
+        camera={{ position: [0, 0, 16], fov: 36 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.84} />
+        {/* Three-point lighting — warm key, cool fill, blue rim */}
+        <ambientLight intensity={0.55} />
         <hemisphereLight
-          intensity={0.9}
-          color="#e7f3ff"
-          groundColor="#0a1734"
+          intensity={0.7}
+          color="#dde8f5"
+          groundColor="#080e1a"
         />
-        <directionalLight position={[5, 2, 4]} intensity={2.05} color="#ffffff" />
-        <directionalLight position={[-3, 1, 3]} intensity={0.95} color="#d6edff" />
-        <directionalLight position={[-4, -1, -3]} intensity={0.34} color="#4a72d8" />
-        <pointLight position={[2.4, 1.2, 2.8]} intensity={1.2} color="#b7deff" />
+        {/* Key light — warm white, strong, camera-right */}
+        <directionalLight position={[5, 3, 4]} intensity={2.4} color="#fff5e6" />
+        {/* Fill — cool, softer, camera-left */}
+        <directionalLight position={[-4, 1, 3]} intensity={0.8} color="#c4d9f2" />
+        {/* Rim — blue backlight for edge definition */}
+        <directionalLight position={[-3, -1, -4]} intensity={0.5} color="#2a5aad" />
+        {/* Specular catch light */}
+        <pointLight position={[2, 1.5, 3]} intensity={0.9} color="#e0eeff" />
 
         <Stars
-          radius={110}
-          depth={60}
-          count={2800}
-          factor={2.8}
+          radius={120}
+          depth={70}
+          count={3500}
+          factor={2.4}
           saturation={0}
           fade
-          speed={reducedMotion ? 0 : 0.25}
+          speed={reducedMotion ? 0 : 0.18}
         />
 
         {textures && <Earth progress={progress} pointer={pointer} textures={textures} />}
