@@ -10,21 +10,6 @@ type Props = {
   initialValue?: string;
 };
 
-const HERO_USES = [
-  {
-    label: "Supply Chains",
-    body: "Ports, terminals, and chokepoints before they hit freight and delivery risk.",
-  },
-  {
-    label: "Energy & Commodities",
-    body: "Tank farms, plants, and dispatch assets that move basis, inventories, and flows.",
-  },
-  {
-    label: "Due Diligence",
-    body: "Facilities, operators, and site context before you spend time on deeper diligence.",
-  },
-];
-
 const SIGNAL_CARDS = [
   {
     title: "Satellite First",
@@ -48,7 +33,7 @@ const SIGNAL_CARDS = [
  *
  * Hero:
  *   - One strong viewport, no lower editorial section.
- *   - Use-cases and rotating examples sit inside the hero itself.
+ *   - Rotating examples sit inside the hero itself.
  *   - The search box cycles through example prompts while empty.
  *
  * Compact:
@@ -190,29 +175,17 @@ function HeroFull({
       </div>
 
       <div className="hero-content">
-        <div className="hero-shell">
-          <div className="hero-copy">
-            <span className="hero-kicker">
-              Built for diligence, market monitoring, and supply-chain decisions
-            </span>
-
-            <div className="hero-use-grid">
-              {HERO_USES.map((useCase) => (
-                <article key={useCase.label} className="hero-use-card">
-                  <span className="hero-use-label">{useCase.label}</span>
-                  <p>{useCase.body}</p>
-                </article>
-              ))}
-            </div>
-
+        <div className="hero-shell hero-shell--centered">
+          <div className="hero-copy hero-copy--centered">
             <div className="hero-caption">
-              <h1 className="display-serif hero-headline">
-                Ask <em>Earth</em> anything.
+              <h1 className="display-serif hero-headline hero-headline--pastel">
+                See the site.<br />
+                <em>Know</em> the story.
               </h1>
-              <p className="hero-sub">
-                Satellite imagery, public map context, infrastructure signals, and the
-                entity graph in one prompt. The answer should help you decide what to do
-                next, not just sound smart.
+              <p className="hero-sub hero-sub--pastel">
+                One prompt pulls satellite imagery, infrastructure footprints, operator
+                records, and ownership graphs — then writes the brief so you can move
+                on the deal, not the research.
               </p>
             </div>
           </div>

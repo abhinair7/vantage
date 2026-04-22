@@ -842,6 +842,16 @@ body {
   align-items: end;
 }
 
+/* Centered variant — single-column, text + input stacked */
+.hero-shell--centered {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-items: center;
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .hero-copy {
   display: flex;
   flex-direction: column;
@@ -849,65 +859,36 @@ body {
   max-width: 700px;
 }
 
-.hero-kicker {
-  display: inline-flex;
+.hero-copy--centered {
   align-items: center;
-  width: max-content;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 12, 25, 0.5);
-  color: rgba(220, 230, 255, 0.72);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  backdrop-filter: blur(12px);
+  text-align: center;
 }
 
-.hero-use-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+/* Pastel headline — lavender → peach → rose gradient */
+.hero-headline--pastel {
+  max-width: 14ch;
+  background: linear-gradient(
+    135deg,
+    #c4b5fd 0%,     /* lavender */
+    #f9a8d4 35%,    /* pink */
+    #fbbf7e 65%,    /* peach */
+    #a5f3c4 100%    /* mint */
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
 }
 
-.hero-use-card {
-  padding: 0.95rem 1rem 1rem;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    linear-gradient(180deg, rgba(17, 25, 48, 0.82) 0%, rgba(8, 12, 24, 0.58) 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 20px 40px -28px rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(14px) saturate(140%);
-  transform: perspective(900px) rotateX(10deg) rotateY(-7deg);
+.hero-headline--pastel em {
+  -webkit-text-fill-color: transparent;
+  font-style: italic;
 }
 
-.hero-use-card:nth-child(2) {
-  transform: perspective(900px) rotateX(6deg) rotateY(0deg);
-}
-
-.hero-use-card:nth-child(3) {
-  transform: perspective(900px) rotateX(10deg) rotateY(7deg);
-}
-
-.hero-use-label {
-  display: inline-flex;
-  margin-bottom: 0.55rem;
-  color: rgba(255, 255, 255, 0.92);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.hero-use-card p {
-  margin: 0;
-  color: rgba(220, 230, 255, 0.66);
-  font-size: 13.5px;
-  line-height: 1.48;
-  letter-spacing: -0.008em;
+/* Pastel subtitle — softer, warmer tone */
+.hero-sub--pastel {
+  color: rgba(210, 200, 230, 0.82);
+  max-width: 44ch;
 }
 
 .hero-caption {
