@@ -12,6 +12,7 @@ const reveal = (delay = 0) => ({
   animate: { opacity: 1, y: 0 },
   transition: { duration: 0.6, delay, ease: EASE },
 });
+const shortSource = (source: string) => source.split("·")[0].trim();
 
 type Props = {
   result: DemoResult;
