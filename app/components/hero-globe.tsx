@@ -27,6 +27,8 @@ type EarthTextures = {
   cloudsMap: THREE.Texture;
 };
 
+type PointerRef = MutableRefObject<{ x: number; y: number }>;
+
 function useEarthTextures(): EarthTextures | null {
   const [textures, setTextures] = useState<EarthTextures | null>(null);
 
@@ -66,9 +68,11 @@ function useEarthTextures(): EarthTextures | null {
 
 function Earth({
   progress,
+  pointer,
   textures,
 }: {
   progress: ProgressRef;
+  pointer: PointerRef;
   textures: EarthTextures;
 }) {
   const earthRef = useRef<THREE.Mesh>(null);
@@ -78,6 +82,7 @@ function Earth({
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
   const specularColor = useMemo(() => new THREE.Color(0x1f3450), []);
   const normalScale = useMemo(() => new THREE.Vector2(0.55, 0.55), []);
+  const emissiveColor = useMemo(() => new THREE.Color(0x0a2b6d), []);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -93,9 +98,9 @@ function Earth({
       cloudsRef.current.rotation.y = elapsed * 0.072;
     }
     if (groupRef.current) {
-      // Hold the planet rock-steady; vertical drift was reading as a
-      // "glitch" against the static reticle overlay.
-      groupRef.current.position.y = 0;
+      groupRef.current.position.y = pointer.current.y * 0.06;
+      groupRef.current.rotation.x = -pointer.current.y * 0.08;
+      groupRef.current.rotation.z = pointer.current.x * 0.05;
     }
 
     // Cinematic dolly: start far away (z=14) and ease in to z=5.4. This is
@@ -104,9 +109,20 @@ function Earth({
     const introT = Math.min(1, elapsed / 2.4);
     const introEase = 1 - Math.pow(1 - introT, 3);
     const dollyFrom = 14;
-    const dollyTo = 5.4;
+    const dollyTo = 4.8;
     const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.8;
     state.camera.position.z = z;
+    state.camera.position.x = THREE.MathUtils.lerp(
+      state.camera.position.x,
+      pointer.current.x * 0.4,
+      0.05,
+    );
+    state.camera.position.y = THREE.MathUtils.lerp(
+      state.camera.position.y,
+      pointer.current.y * 0.24,
+      0.05,
+    );
+    state.camera.lookAt(0, 0, 0);
   });
 
   return (
@@ -118,8 +134,10 @@ function Earth({
           normalMap={normalMap}
           specularMap={specularMap}
           specular={specularColor}
-          shininess={6}
+          shininess={14}
           normalScale={normalScale}
+          emissive={emissiveColor}
+          emissiveIntensity={0.24}
         />
       </mesh>
 
@@ -132,12 +150,72 @@ function Earth({
           depthWrite={false}
         />
       </mesh>
+
+      <mesh scale={1.08}>
+        <sphereGeometry args={[1, 96, 96]} />
+        <meshBasicMaterial
+          color="#63b0ff"
+          transparent
+          opacity={0.17}
+          blending={THREE.AdditiveBlending}
+          side={THREE.BackSide}
+          depthWrite={false}
+        />
+      </mesh>
+
+      <OrbitSignals />
     </group>
+  );
+}
+
+function OrbitSignals() {
+  const firstRing = useRef<THREE.Group>(null);
+  const secondRing = useRef<THREE.Group>(null);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (firstRing.current) {
+      firstRing.current.rotation.x = 0.68;
+      firstRing.current.rotation.y = t * 0.16;
+      firstRing.current.rotation.z = 0.12;
+    }
+    if (secondRing.current) {
+      secondRing.current.rotation.x = -0.58;
+      secondRing.current.rotation.y = -t * 0.11;
+      secondRing.current.rotation.z = 0.24;
+    }
+  });
+
+  return (
+    <>
+      <group ref={firstRing}>
+        <mesh>
+          <torusGeometry args={[1.42, 0.0038, 16, 180]} />
+          <meshBasicMaterial color="#76beff" transparent opacity={0.24} />
+        </mesh>
+        <mesh position={[1.42, 0, 0]}>
+          <sphereGeometry args={[0.03, 16, 16]} />
+          <meshBasicMaterial color="#dff4ff" />
+        </mesh>
+      </group>
+
+      <group ref={secondRing}>
+        <mesh>
+          <torusGeometry args={[1.58, 0.0032, 16, 180]} />
+          <meshBasicMaterial color="#6acbff" transparent opacity={0.18} />
+        </mesh>
+        <mesh position={[-1.58, 0, 0]}>
+          <sphereGeometry args={[0.024, 16, 16]} />
+          <meshBasicMaterial color="#98ddff" />
+        </mesh>
+      </group>
+    </>
   );
 }
 
 export function HeroGlobe() {
   const progress = useRef(0);
+  const pointer = useRef({ x: 0, y: 0 });
   const [reducedMotion, setReducedMotion] = useState(false);
   const textures = useEarthTextures();
 
@@ -148,9 +226,19 @@ export function HeroGlobe() {
       const max = window.innerHeight * 0.9;
       progress.current = Math.min(1, Math.max(0, window.scrollY / max));
     };
+    const onPointerMove = (event: PointerEvent) => {
+      pointer.current = {
+        x: (event.clientX / window.innerWidth - 0.5) * 2,
+        y: (event.clientY / window.innerHeight - 0.5) * -2,
+      };
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onPointerMove);
+    };
   }, []);
 
   return (
@@ -162,7 +250,7 @@ export function HeroGlobe() {
         zIndex: 0,
         pointerEvents: "none",
         background:
-          "radial-gradient(ellipse at 50% 38%, #0a1022 0%, #050814 55%, #02040b 100%)",
+          "radial-gradient(ellipse at 50% 36%, #11244d 0%, #071225 42%, #02040b 100%)",
       }}
     >
       <Canvas
@@ -172,22 +260,28 @@ export function HeroGlobe() {
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.62} />
-        <directionalLight position={[5, 2, 4]} intensity={1.55} color="#ffffff" />
-        <directionalLight position={[-3, 1, 3]} intensity={0.65} color="#e9f2ff" />
-        <directionalLight position={[-4, -1, -3]} intensity={0.22} color="#3358aa" />
+        <ambientLight intensity={0.84} />
+        <hemisphereLight
+          intensity={0.9}
+          color="#e7f3ff"
+          groundColor="#0a1734"
+        />
+        <directionalLight position={[5, 2, 4]} intensity={2.05} color="#ffffff" />
+        <directionalLight position={[-3, 1, 3]} intensity={0.95} color="#d6edff" />
+        <directionalLight position={[-4, -1, -3]} intensity={0.34} color="#4a72d8" />
+        <pointLight position={[2.4, 1.2, 2.8]} intensity={1.2} color="#b7deff" />
 
         <Stars
           radius={110}
           depth={60}
-          count={2400}
-          factor={2.6}
+          count={2800}
+          factor={2.8}
           saturation={0}
           fade
           speed={reducedMotion ? 0 : 0.25}
         />
 
-        {textures && <Earth progress={progress} textures={textures} />}
+        {textures && <Earth progress={progress} pointer={pointer} textures={textures} />}
       </Canvas>
     </div>
   );

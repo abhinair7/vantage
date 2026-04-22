@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence } from "framer-motion";
 import { Prompt } from "./components/prompt";
@@ -18,7 +18,15 @@ const HeroGlobe = dynamic(
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "loading"; query: string; pending: DemoResult }
+  | {
+      kind: "loading";
+      query: string;
+      pending: DemoResult;
+      resolved?: DemoResult;
+      requestId: number;
+      ready: boolean;
+      overlayDone: boolean;
+    }
   | { kind: "done"; query: string; result: DemoResult };
 
 /**
@@ -35,16 +43,74 @@ type Phase =
  */
 export default function Home() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const requestRef = useRef(0);
 
   const handleAsk = useCallback((query: string) => {
     const pending = matchQuery(query);
-    setPhase({ kind: "loading", query, pending });
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+
+    setPhase({
+      kind: "loading",
+      query,
+      pending,
+      resolved: undefined,
+      requestId,
+      ready: false,
+      overlayDone: false,
+    });
+
+    void fetch("/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Analyze failed with ${response.status}`);
+        return (await response.json()) as { result: DemoResult };
+      })
+      .then(({ result }) => {
+        setPhase((current) => {
+          if (current.kind !== "loading" || current.requestId !== requestId) {
+            return current;
+          }
+
+          if (current.overlayDone) {
+            return { kind: "done", query: current.query, result };
+          }
+
+          return {
+            ...current,
+            resolved: result,
+            ready: true,
+          };
+        });
+      })
+      .catch((error) => {
+        console.error("[page] analyze request failed", error);
+        setPhase((current) => {
+          if (current.kind !== "loading" || current.requestId !== requestId) {
+            return current;
+          }
+          if (current.overlayDone) {
+            return { kind: "done", query: current.query, result: current.pending };
+          }
+          return {
+            ...current,
+            ready: true,
+          };
+        });
+      });
   }, []);
 
   const handleLoadingDone = useCallback(() => {
     setPhase((p) =>
       p.kind === "loading"
-        ? { kind: "done", query: p.query, result: p.pending }
+        ? p.ready
+          ? { kind: "done", query: p.query, result: p.resolved ?? p.pending }
+          : { ...p, overlayDone: true }
         : p
     );
   }, []);

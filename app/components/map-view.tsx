@@ -13,7 +13,7 @@ import {
 import maplibregl from "maplibre-gl";
 import type { AOI, Marker as VxMarker } from "../lib/demo-results";
 
-export type BasemapKey = "light" | "satellite" | "terrain";
+export type BasemapKey = "satellite" | "light" | "terrain";
 
 /** Imperative handle callers use to drive the map from outside. */
 export type MapHandle = {
@@ -83,7 +83,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
   const onFeatureClickRef = useRef(onFeatureClick);
   onFeatureClickRef.current = onFeatureClick;
 
-  const [basemap, setBasemapState] = useState<BasemapKey>("light");
+  const [basemap, setBasemapState] = useState<BasemapKey>("satellite");
   // Crossfade position 0..1. 0 = before only, 1 = after only.
   const [compare, setCompare] = useState(0.5);
 
@@ -98,7 +98,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
   useEffect(() => {
     if (!container.current || mapRef.current) return;
 
-    const base = BASEMAPS.light;
+    const base = BASEMAPS.satellite;
     const map = new maplibregl.Map({
       container: container.current,
       style: {
@@ -256,19 +256,19 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
       >
         <button
           type="button"
-          className={`seg ${basemap === "light" ? "is-active" : ""}`}
-          onClick={() => setBasemapState("light")}
-          title="Light basemap (CartoDB Positron)"
-        >
-          Light
-        </button>
-        <button
-          type="button"
           className={`seg ${basemap === "satellite" ? "is-active" : ""}`}
           onClick={() => setBasemapState("satellite")}
           title="Satellite imagery (Esri World Imagery)"
         >
           Satellite
+        </button>
+        <button
+          type="button"
+          className={`seg ${basemap === "light" ? "is-active" : ""}`}
+          onClick={() => setBasemapState("light")}
+          title="Light basemap (CartoDB Positron)"
+        >
+          Context
         </button>
         <button
           type="button"
@@ -336,11 +336,11 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
               alignItems: "center",
               gap: "0.45rem",
               padding: "0.3rem 0.6rem",
-              background: "rgba(255,255,255,0.92)",
-              border: "1px solid var(--line)",
+              background: "rgba(6, 10, 22, 0.78)",
+              border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 8,
               fontSize: 11.5,
-              color: "var(--fg-2)",
+              color: "rgba(255,255,255,0.82)",
               backdropFilter: "saturate(160%) blur(8px)",
             }}
           >
@@ -361,10 +361,13 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
                     : "1.5px dashed #6E6E73",
               }}
             />
-            <span className="mono" style={{ fontSize: 11 }}>
+            <span
+              className="mono"
+              style={{ fontSize: 11, color: "rgba(255,255,255,0.72)" }}
+            >
               {p.date}
             </span>
-            <span style={{ color: "var(--fg-3)" }}>· {p.label}</span>
+            <span style={{ color: "rgba(255,255,255,0.55)" }}>· {p.label}</span>
           </div>
         ))}
       </div>
@@ -381,7 +384,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
             className="mono"
             style={{
               fontSize: 10.5,
-              color: "var(--fg-3)",
+              color: "rgba(255,255,255,0.7)",
               whiteSpace: "nowrap",
             }}
           >
@@ -399,7 +402,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
             className="mono"
             style={{
               fontSize: 10.5,
-              color: "var(--accent)",
+              color: "#8cc8ff",
               whiteSpace: "nowrap",
             }}
           >

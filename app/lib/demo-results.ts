@@ -449,14 +449,9 @@ export const DEMO_RESULTS: Record<string, DemoResult> = {
   insufficient: INSUFFICIENT,
 };
 
-/**
- * Keyword-scores an incoming query against the hand-authored preset set.
- * If nothing scores above the threshold, the synthesizer takes over so the
- * user still gets a structured, plausible-looking answer.
- */
-export function matchQuery(q: string): DemoResult {
+function scorePresetQuery(q: string): { id: string; score: number }[] {
   const lower = q.toLowerCase();
-  const candidates: { id: string; score: number }[] = [
+  const candidates = [
     {
       id: MUNDRA.id,
       score:
@@ -480,7 +475,23 @@ export function matchQuery(q: string): DemoResult {
     },
   ];
   candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+
+export function matchPresetQuery(q: string): DemoResult | null {
+  const candidates = scorePresetQuery(q);
   if (candidates[0].score >= 2) return DEMO_RESULTS[candidates[0].id];
+  return null;
+}
+
+/**
+ * Keyword-scores an incoming query against the hand-authored preset set.
+ * If nothing scores above the threshold, the synthesizer takes over so the
+ * user still gets a structured, plausible-looking answer.
+ */
+export function matchQuery(q: string): DemoResult {
+  const preset = matchPresetQuery(q);
+  if (preset) return preset;
   return synthesize(q);
 }
 

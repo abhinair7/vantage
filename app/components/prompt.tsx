@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { EXAMPLE_PROMPTS } from "../lib/demo-results";
 
 type Props = {
@@ -10,42 +10,83 @@ type Props = {
   initialValue?: string;
 };
 
+const HERO_USES = [
+  {
+    label: "Supply Chains",
+    body: "Ports, terminals, and chokepoints before they hit freight and delivery risk.",
+  },
+  {
+    label: "Energy & Commodities",
+    body: "Tank farms, plants, and dispatch assets that move basis, inventories, and flows.",
+  },
+  {
+    label: "Due Diligence",
+    body: "Facilities, operators, and site context before you spend time on deeper diligence.",
+  },
+];
+
+const SIGNAL_CARDS = [
+  {
+    title: "Satellite First",
+    body: "Ground truth before the memo.",
+    meta: "EO · SAR · Thermal",
+  },
+  {
+    title: "Entity Graph",
+    body: "Operators, parents, counterparties.",
+    meta: "Registry · Wikidata · OSM",
+  },
+  {
+    title: "Decision Brief",
+    body: "What matters, what does not, and what to do next.",
+    meta: "Impact · Confidence · Action",
+  },
+];
+
 /**
  * The Prompt surface — hero + compact header share the same component.
  *
- * Hero (idle):
- *   - Dark cinematic first viewport, Earth visible through the scrim.
- *   - As the user scrolls, text dissolves and the globe takes the stage.
- *   - Second viewport is white editorial paper with numbered propositions.
+ * Hero:
+ *   - One strong viewport, no lower editorial section.
+ *   - Use-cases and rotating examples sit inside the hero itself.
+ *   - The search box cycles through example prompts while empty.
  *
- * Compact (a query is in flight or answered):
+ * Compact:
  *   - A slim glass header pinned to the top of the answer screen.
  */
 export function Prompt({ onSubmit, compact, initialValue }: Props) {
   const [value, setValue] = useState(initialValue ?? "");
+  const [exampleIndex, setExampleIndex] = useState(0);
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Autofocus on desktop (not mobile — avoids keyboard jumping in)
   useEffect(() => {
     if (compact || !ref.current) return;
     const mq = window.matchMedia("(min-width: 768px)");
     if (mq.matches) ref.current.focus();
   }, [compact]);
 
-  // Keep local value in sync when the parent pushes a new initial (Reset, etc.)
   useEffect(() => {
     setValue(initialValue ?? "");
   }, [initialValue]);
+
+  useEffect(() => {
+    if (compact || value.trim()) return;
+    const interval = window.setInterval(() => {
+      setExampleIndex((current) => (current + 1) % EXAMPLE_PROMPTS.length);
+    }, 2400);
+    return () => window.clearInterval(interval);
+  }, [compact, value]);
 
   const autoGrow = () => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 240) + "px";
+    el.style.height = Math.min(el.scrollHeight, compact ? 120 : 240) + "px";
   };
+
   useEffect(() => {
     autoGrow();
-  }, [value]);
+  }, [compact, value]);
 
   const submit = () => {
     const q = value.trim();
@@ -101,12 +142,18 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
     );
   }
 
-  return <HeroFull value={value} setValue={setValue} submit={submit} onSubmit={onSubmit} inputRef={ref} onKeyDown={onKeyDown} />;
+  return (
+    <HeroFull
+      value={value}
+      setValue={setValue}
+      submit={submit}
+      onSubmit={onSubmit}
+      inputRef={ref}
+      onKeyDown={onKeyDown}
+      ghostPrompt={EXAMPLE_PROMPTS[exampleIndex]?.query ?? ""}
+    />
+  );
 }
-
-/* ------------------------------------------------------------------ */
-/* The full hero.                                                      */
-/* ------------------------------------------------------------------ */
 
 function HeroFull({
   value,
@@ -115,6 +162,7 @@ function HeroFull({
   onSubmit,
   inputRef,
   onKeyDown,
+  ghostPrompt,
 }: {
   value: string;
   setValue: (v: string) => void;
@@ -122,135 +170,123 @@ function HeroFull({
   onSubmit: (q: string) => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  ghostPrompt: string;
 }) {
   return (
-    <>
-      {/* Hero — full viewport. Earth sits inside the telescope aperture.
-          Headline + input live in the dark housing BELOW the aperture so
-          nothing fights for attention. No entrance animations.           */}
-      <section className="hero">
-        <div className="hero-scrim" aria-hidden />
+    <section className="hero">
+      <div className="hero-scrim" aria-hidden />
 
-        <div className="hero-content">
-          <div className="hero-caption">
-            <h1 className="display-serif hero-headline">
-              Ask <em>Earth</em> anything.
-            </h1>
-            <p className="hero-sub">
-              Satellite imagery, vessel positions, and the entity graph —
-              resolved through one prompt. Every answer carries its source.
-            </p>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-            className="hero-input-wrap"
+      <div className="hero-signal-cloud" aria-hidden>
+        {SIGNAL_CARDS.map((card, index) => (
+          <article
+            key={card.title}
+            className={`hero-signal-card hero-signal-card-${index + 1}`}
           >
-            <div className="hero-input">
-              <textarea
-                ref={inputRef}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={onKeyDown}
-                rows={1}
-                aria-label="Ask Earth anything"
-                placeholder="Has construction at Mundra Port increased over the last 6 months?"
-              />
-              <button type="submit" aria-label="Ask" disabled={!value.trim()}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M12 19V5M12 5l-6 6M12 5l6 6"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+            <span className="hero-signal-meta">{card.meta}</span>
+            <h3>{card.title}</h3>
+            <p>{card.body}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="hero-content">
+        <div className="hero-shell">
+          <div className="hero-copy">
+            <span className="hero-kicker">
+              Built for diligence, market monitoring, and supply-chain decisions
+            </span>
+
+            <div className="hero-use-grid">
+              {HERO_USES.map((useCase) => (
+                <article key={useCase.label} className="hero-use-card">
+                  <span className="hero-use-label">{useCase.label}</span>
+                  <p>{useCase.body}</p>
+                </article>
+              ))}
             </div>
-          </form>
-        </div>
-      </section>
 
-      {/* Examples band — white paper below the hero. No entrance staggers. */}
-      <section className="band band-white">
-        <div className="page band-inner">
-          <div className="eyebrow" style={{ marginBottom: "2rem" }}>
-            OR PICK ONE
+            <div className="hero-caption">
+              <h1 className="display-serif hero-headline">
+                Ask <em>Earth</em> anything.
+              </h1>
+              <p className="hero-sub">
+                Satellite imagery, public map context, infrastructure signals, and the
+                entity graph in one prompt. The answer should help you decide what to do
+                next, not just sound smart.
+              </p>
+            </div>
           </div>
-          <ol className="editorial-list">
-            {EXAMPLE_PROMPTS.map((p, i) => (
-              <li key={p.query}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setValue(p.query);
-                    window.setTimeout(() => onSubmit(p.query), 60);
-                  }}
-                  className="editorial-row"
-                >
-                  <span className="editorial-num">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="editorial-label">{p.label}</span>
-                  <span className="editorial-arrow" aria-hidden>↗</span>
+
+          <div className="hero-panel">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+              className="hero-input-wrap"
+            >
+              <div className="hero-input">
+                <div className="hero-input-shell">
+                  <span className="hero-input-label">TRY</span>
+
+                  <AnimatePresence mode="wait">
+                    {!value.trim() && (
+                      <motion.div
+                        key={ghostPrompt}
+                        className="hero-input-ghost"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.26, ease: [0.22, 0.61, 0.36, 1] }}
+                      >
+                        {ghostPrompt}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <textarea
+                    ref={inputRef}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    rows={1}
+                    aria-label="Ask Earth anything"
+                    placeholder=""
+                  />
+                </div>
+
+                <button type="submit" aria-label="Ask" disabled={!value.trim()}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M12 19V5M12 5l-6 6M12 5l6 6"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </button>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
+              </div>
+            </form>
 
-      {/* Capabilities band */}
-      <section className="band band-white">
-        <div className="page band-inner">
-          <div className="eyebrow" style={{ marginBottom: "2rem" }}>
-            WHAT VANTAGE ANSWERS
-          </div>
-          <div className="capability-grid">
-            {CAPABILITIES.map((c, i) => (
-              <article key={c.title} className="capability">
-                <span className="editorial-num" style={{ color: "var(--fg-3)" }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <h3>{c.title}</h3>
-                <p>{c.body}</p>
-              </article>
-            ))}
+            <div className="hero-example-row">
+              {EXAMPLE_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt.query}
+                  type="button"
+                  className="hero-example-chip"
+                  onClick={() => {
+                    setValue(prompt.query);
+                    window.setTimeout(() => onSubmit(prompt.query), 80);
+                  }}
+                >
+                  {prompt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </section>
-
-      {/* Footer ink */}
-      <footer className="band-footer">
-        <div className="page" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
-            © Vantage · prototype
-          </span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
-            Every answer carries its source.
-          </span>
-        </div>
-      </footer>
-    </>
+      </div>
+    </section>
   );
 }
-
-const CAPABILITIES: Array<{ title: string; body: string }> = [
-  {
-    title: "Ports, in motion.",
-    body:
-      "Berth occupancy, vessel dwell times, quay construction — resolved down to the ship and the crane.",
-  },
-  {
-    title: "Commodities, measured.",
-    body:
-      "Oil tank fills, stockpile volumes, acreage planted. Every number backed by a pixel and a timestamp.",
-  },
-  {
-    title: "Activity, sourced.",
-    body:
-      "Vehicle counts, thermal signatures, nightlights. Answers carry their evidence or the system refuses to guess.",
-  },
-];
