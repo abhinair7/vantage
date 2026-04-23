@@ -7,6 +7,7 @@ import {
 } from "./demo-results";
 import {
   detectMode,
+  detectMeasurementIntent,
   detectSubject,
   extractCoordinates,
   extractLocationHints,
@@ -26,15 +27,28 @@ type NominatimPlace = {
   lon: string;
   display_name: string;
   boundingbox?: [string, string, string, string];
+  category?: string;
   class?: string;
   type?: string;
   addresstype?: string;
+  name?: string;
   address?: Record<string, string>;
   extratags?: Record<string, string>;
   osm_type?: string;
   osm_id?: number;
   importance?: number;
+  geojson?: SurfaceGeometry;
 };
+
+type SurfaceGeometry =
+  | {
+      type: "Polygon";
+      coordinates: [number, number][][];
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: [number, number][][][];
+    };
 
 type ResolvedPlace = {
   name: string;
@@ -50,6 +64,7 @@ type ResolvedPlace = {
   osmId?: number;
   importance?: number;
   sourceUrl?: string;
+  geometry?: SurfaceGeometry;
 };
 
 type OverpassElement = {
@@ -155,8 +170,14 @@ export async function analyzeQuery(query: string): Promise<DemoResult> {
 async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> {
   const mode = detectMode(query);
   const subject = detectSubject(query);
-  const place = await resolvePlace(query, subject);
+  const measurementIntent = detectMeasurementIntent(query);
+  const place = await resolvePlace(query, subject, measurementIntent === "footprint");
   if (!place) return null;
+
+  if (measurementIntent === "footprint") {
+    const footprintResult = buildFootprintResult(query, mode, place);
+    if (footprintResult) return footprintResult;
+  }
 
   const [features, wikidata] = await Promise.all([
     fetchNearbyContext(place, subject),
@@ -277,10 +298,14 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
   };
 }
 
-async function resolvePlace(query: string, subject: Subject): Promise<ResolvedPlace | null> {
+async function resolvePlace(
+  query: string,
+  subject: Subject,
+  includeGeometry = false,
+): Promise<ResolvedPlace | null> {
   const coords = extractCoordinates(query);
   if (coords) {
-    const reverse = await fetchNominatimReverse(coords[0], coords[1]);
+    const reverse = await fetchNominatimReverse(coords[0], coords[1], includeGeometry);
     if (reverse) return normalizePlace(reverse);
   }
 
@@ -293,7 +318,7 @@ async function resolvePlace(query: string, subject: Subject): Promise<ResolvedPl
     if (!normalized || seenQueries.has(normalized)) continue;
     seenQueries.add(normalized);
 
-    const matches = await fetchNominatimSearch(hint);
+    const matches = await fetchNominatimSearch(hint, includeGeometry);
     candidates.push(...matches);
   }
 
@@ -301,7 +326,10 @@ async function resolvePlace(query: string, subject: Subject): Promise<ResolvedPl
   return best ? normalizePlace(best) : null;
 }
 
-async function fetchNominatimSearch(query: string): Promise<NominatimPlace[]> {
+async function fetchNominatimSearch(
+  query: string,
+  includeGeometry = false,
+): Promise<NominatimPlace[]> {
   const params = new URLSearchParams({
     q: query,
     format: "jsonv2",
@@ -309,6 +337,9 @@ async function fetchNominatimSearch(query: string): Promise<NominatimPlace[]> {
     addressdetails: "1",
     extratags: "1",
   });
+  if (includeGeometry) {
+    params.set("polygon_geojson", "1");
+  }
 
   const results = await fetchJson<NominatimPlace[]>(
     `https://nominatim.openstreetmap.org/search?${params.toString()}`,
@@ -317,7 +348,11 @@ async function fetchNominatimSearch(query: string): Promise<NominatimPlace[]> {
   return results ?? [];
 }
 
-async function fetchNominatimReverse(lat: number, lon: number): Promise<NominatimPlace | null> {
+async function fetchNominatimReverse(
+  lat: number,
+  lon: number,
+  includeGeometry = false,
+): Promise<NominatimPlace | null> {
   const params = new URLSearchParams({
     lat: String(lat),
     lon: String(lon),
@@ -326,6 +361,9 @@ async function fetchNominatimReverse(lat: number, lon: number): Promise<Nominati
     addressdetails: "1",
     extratags: "1",
   });
+  if (includeGeometry) {
+    params.set("polygon_geojson", "1");
+  }
 
   return fetchJson<NominatimPlace>(
     `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
@@ -495,8 +533,9 @@ function scorePlaceCandidate(
   subject: Subject,
 ): number {
   const lowerQuery = query.toLowerCase();
-  const name = candidate.display_name.split(",")[0]?.trim().toLowerCase() ?? "";
-  const className = candidate.class?.toLowerCase() ?? "";
+  const name =
+    (candidate.name || candidate.display_name.split(",")[0]?.trim() || "").toLowerCase();
+  const className = (candidate.class ?? candidate.category ?? "").toLowerCase();
   const typeName = candidate.type?.toLowerCase() ?? candidate.addresstype?.toLowerCase() ?? "";
   const text = `${name} ${candidate.display_name}`.toLowerCase();
 
@@ -588,11 +627,11 @@ function normalizePlace(place: NominatimPlace): ResolvedPlace {
     : [lat - 0.02, lat + 0.02, lon - 0.02, lon + 0.02];
 
   return {
-    name: place.display_name.split(",")[0]?.trim() || "the resolved site",
+    name: place.name || place.display_name.split(",")[0]?.trim() || "the resolved site",
     displayName: place.display_name,
     center: [lon, lat],
     bbox: [south, north, west, east],
-    className: place.class ?? "place",
+    className: place.class ?? place.category ?? "place",
     typeName: place.type ?? place.addresstype ?? "site",
     address: place.address ?? {},
     wikipediaTag: place.extratags?.wikipedia,
@@ -601,6 +640,85 @@ function normalizePlace(place: NominatimPlace): ResolvedPlace {
     osmId: place.osm_id,
     importance: place.importance,
     sourceUrl: buildOsmObjectUrl(place.osm_type, place.osm_id, [lon, lat]),
+    geometry: normalizeSurfaceGeometry(place.geojson),
+  };
+}
+
+function normalizeSurfaceGeometry(
+  geometry?: NominatimPlace["geojson"],
+): SurfaceGeometry | undefined {
+  if (!geometry) return undefined;
+  if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+    return geometry;
+  }
+  return undefined;
+}
+
+function buildFootprintResult(
+  query: string,
+  mode: AnalysisMode,
+  place: ResolvedPlace,
+): DemoResult | null {
+  if (!place.geometry) return null;
+  if (isBroadPlace(place) || place.className === "boundary" || place.typeName === "administrative") {
+    return null;
+  }
+
+  const areaSqm = computeSurfaceAreaSqm(place.geometry);
+  if (!Number.isFinite(areaSqm) || areaSqm <= 0) return null;
+
+  const roundedSqm = Math.round(areaSqm / 10) * 10;
+  const hectares = areaSqm / 10000;
+  const acres = areaSqm / 4046.8564224;
+  const placeLabel = titleCase(place.name);
+  const admin = compactAddress(place.address);
+  const confidence = 0.78;
+
+  const evidence: Evidence[] = [
+    {
+      id: "e1",
+      kind: "measurement",
+      claim: `${placeLabel} polygon encloses about ${formatInteger(roundedSqm)} m² of mapped surface area.`,
+      source: `OpenStreetMap geometry · ${place.className}/${place.typeName}`,
+      sourceUrl: place.sourceUrl,
+      hash: hexHash(`footprint:${query}:${place.osmType}:${place.osmId}:${roundedSqm}`),
+    },
+  ];
+
+  return {
+    id: `footprint_${hash(query).toString(16)}`,
+    query,
+    headline: `${placeLabel} maps to roughly ${formatInteger(roundedSqm)} m² of current footprint.`,
+    narrative: [
+      {
+        text: `${placeLabel} resolves to ${admin}. For this question, the answer comes from the current mapped OpenStreetMap polygon for the resolved ${place.className}/${place.typeName} object, not from generated prose or a guessed envelope.`,
+        refs: ["e1"],
+      },
+      {
+        text: `The mapped footprint is about ${formatInteger(roundedSqm)} square metres, which is roughly ${hectares.toFixed(2)} hectares or ${acres.toFixed(2)} acres.`,
+        refs: ["e1"],
+      },
+      {
+        text: `Confidence is ${Math.round(confidence * 100)}% because the geometry is specific and directly attached to the named site. The main limitation is scope: this is the currently mapped footprint, so any unmapped canopies, layover space, or recent civil works would not appear until the map geometry is updated.`,
+        refs: ["e1"],
+      },
+      {
+        text: "If you need as-built footprint rather than mapped footprint, the next honest step is an imagery-derived perimeter measurement over a dated satellite pass.",
+        refs: [],
+      },
+    ],
+    evidence,
+    aoi: buildFootprintAoi(place, "e1"),
+    confidence,
+    mode,
+    tookMs: 1650,
+    methodology: [
+      "Resolved the site with OpenStreetMap Nominatim using the place name from the prompt.",
+      "Requested the returned OSM polygon geometry and computed surface area from that geometry rather than from the bounding box.",
+      "Reported the result as a mapped footprint, not a satellite-confirmed as-built perimeter.",
+      "Best next step for higher confidence: compare the map geometry against a recent satellite image and redraw if the site has changed.",
+    ],
+    kind: "answer",
   };
 }
 
@@ -822,15 +940,6 @@ function buildNoMatchResult(query: string): DemoResult {
 }
 
 function buildAoi(place: ResolvedPlace, features: ContextFeature[], refs: EvidenceRefs): AOI {
-  const [south, north, west, east] = place.bbox;
-  const coords: [number, number][] = [
-    [west, north],
-    [east, north],
-    [east, south],
-    [west, south],
-    [west, north],
-  ];
-
   const markers: Marker[] = features.slice(0, 5).map((feature, index) => ({
     id: `m${index + 1}`,
     kind: feature.markerKind,
@@ -846,7 +955,7 @@ function buildAoi(place: ResolvedPlace, features: ContextFeature[], refs: Eviden
       {
         label: titleCase(place.name),
         date: "Grounded context",
-        coords,
+        coords: buildPlacePolygonCoords(place),
         accent: "current",
         evidenceRef: refs.place,
       },
@@ -880,6 +989,114 @@ function buildAoi(place: ResolvedPlace, features: ContextFeature[], refs: Eviden
         : {}),
     },
   };
+}
+
+function buildFootprintAoi(place: ResolvedPlace, evidenceRef: string): AOI {
+  return {
+    center: place.center,
+    zoom: Math.min(16.6, chooseZoom(place.bbox) + 0.6),
+    polygons: [
+      {
+        label: "Mapped footprint",
+        date: "Current OSM geometry",
+        coords: buildPlacePolygonCoords(place),
+        accent: "current",
+        evidenceRef,
+      },
+    ],
+    evidenceFocus: {
+      [evidenceRef]: {
+        center: place.center,
+        zoom: Math.min(16.8, chooseZoom(place.bbox) + 0.9),
+      },
+    },
+  };
+}
+
+function buildPlacePolygonCoords(place: ResolvedPlace): [number, number][] {
+  const ring = largestOuterRing(place.geometry);
+  if (ring && ring.length >= 4) return closeRing(ring);
+
+  const [south, north, west, east] = place.bbox;
+  return [
+    [west, north],
+    [east, north],
+    [east, south],
+    [west, south],
+    [west, north],
+  ];
+}
+
+function largestOuterRing(
+  geometry?: SurfaceGeometry,
+): [number, number][] | null {
+  if (!geometry) return null;
+
+  const polygons =
+    geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+
+  let bestRing: [number, number][] | null = null;
+  let bestArea = 0;
+
+  for (const polygon of polygons) {
+    const ring = polygon[0];
+    if (!ring || ring.length < 4) continue;
+    const area = ringAreaSqm(ring);
+    if (area > bestArea) {
+      bestArea = area;
+      bestRing = ring;
+    }
+  }
+
+  return bestRing;
+}
+
+function computeSurfaceAreaSqm(geometry: SurfaceGeometry): number {
+  const polygons =
+    geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+
+  let total = 0;
+  for (const polygon of polygons) {
+    const [outer, ...holes] = polygon;
+    if (!outer || outer.length < 4) continue;
+    total += ringAreaSqm(outer);
+    for (const hole of holes) {
+      total -= ringAreaSqm(hole);
+    }
+  }
+
+  return Math.max(0, total);
+}
+
+function ringAreaSqm(ring: [number, number][]): number {
+  if (ring.length < 4) return 0;
+
+  const EARTH_RADIUS_M = 6378137;
+  const lat0 =
+    (ring.reduce((sum, [, lat]) => sum + lat, 0) / ring.length) * (Math.PI / 180);
+  const projected = ring.map(([lon, lat]) => [
+    EARTH_RADIUS_M * (lon * Math.PI / 180) * Math.cos(lat0),
+    EARTH_RADIUS_M * (lat * Math.PI / 180),
+  ] as const);
+
+  let area = 0;
+  for (let index = 0; index < projected.length; index += 1) {
+    const [x1, y1] = projected[index];
+    const [x2, y2] = projected[(index + 1) % projected.length];
+    area += x1 * y2 - x2 * y1;
+  }
+
+  return Math.abs(area) / 2;
+}
+
+function closeRing(ring: [number, number][]): [number, number][] {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (!first || !last) return ring;
+  if (first && last && first[0] === last[0] && first[1] === last[1]) {
+    return ring;
+  }
+  return [...ring, first];
 }
 
 function buildOverpassQuery(radius: number, lat: number, lon: number, subject: Subject): string {
@@ -1259,12 +1476,20 @@ function buildOsmMapUrl([lon, lat]: [number, number], zoom: number): string {
 function compactAddress(address: Record<string, string>): string {
   const candidates = [
     address.city,
+    address.city_district,
+    address.suburb,
     address.county,
     address.state,
     address.country,
   ].filter(Boolean);
 
   return candidates.length > 0 ? joinNatural(candidates as string[]) : "the resolved area";
+}
+
+function formatInteger(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function formatDistance(distanceKm: number): string {

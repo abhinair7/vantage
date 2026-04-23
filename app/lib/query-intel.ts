@@ -21,6 +21,7 @@ export type Subject =
   | "facility";
 
 export type AnalysisMode = "investigate" | "verify" | "monitor";
+export type MeasurementIntent = "footprint";
 
 const SUBJECT_KEYWORDS: Record<Subject, string[]> = {
   port: ["port", "harbor", "harbour", "terminal", "quay", "dock", "berth"],
@@ -42,13 +43,28 @@ const SUBJECT_KEYWORDS: Record<Subject, string[]> = {
   vessel: ["vessel", "ship", "tanker", "container ship", "bulker"],
   aircraft: ["aircraft", "airplane", "jet", "fighter", "bomber", "helicopter"],
   military: ["military", "troop", "garrison", "barracks", "base"],
-  facility: ["facility", "site", "compound", "installation"],
+  facility: [
+    "facility",
+    "site",
+    "compound",
+    "installation",
+    "bus stand",
+    "bus station",
+    "bus terminal",
+    "station",
+    "terminal",
+    "depot",
+  ],
 };
 
 const LOCATION_PATTERN =
   /\b(?:at|in|near|around|outside|inside|from|of)\s+([^?.!,;]+?)(?=\b(?:since|over|during|for|within|last|past|today|tomorrow|yesterday|this|that|these|those|exists|exist|is|are|has|have|with|without|using|show|shows|change|changed|increased|decreased|verify|monitor|track)\b|[?.!,;]|$)/gi;
 const TITLE_PATTERN = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
 const QUOTE_PATTERN = /["“]([^"”]{2,80})["”]/g;
+const FOOTPRINT_PATTERN =
+  /\b(?:footprint|area|size|acreage|extent|sqm|sq\.?\s?m|m2|m²|square meters?|square metres?|hectare|hectares|ha|acre|acres)\b/i;
+const LEADING_AREA_HINT_PATTERN =
+  /^\s*([a-z0-9][a-z0-9&'",./() -]{2,120}?)(?=\s+\b(?:total|current|latest|now|today|footprint|area|size|acreage|extent|sqm|sq\.?\s?m|m2|m²|square|hectare|hectares|ha|acre|acres)\b)/i;
 const GENERIC_HINTS = new Set([
   "is",
   "are",
@@ -95,6 +111,10 @@ export function detectMode(q: string): AnalysisMode {
   return "investigate";
 }
 
+export function detectMeasurementIntent(q: string): MeasurementIntent | null {
+  return FOOTPRINT_PATTERN.test(q) ? "footprint" : null;
+}
+
 export function extractCoordinates(q: string): [number, number] | null {
   const match = q.match(
     /(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/,
@@ -121,6 +141,14 @@ export function extractLocationHints(q: string): string[] {
 
   for (const match of q.matchAll(QUOTE_PATTERN)) {
     push(match[1]);
+  }
+
+  if (
+    detectMeasurementIntent(q) === "footprint" &&
+    !/^\s*(?:is|are|was|were|does|do|did|has|have|can|could|should|would|will|what|which|where|when|why|how)\b/i.test(q)
+  ) {
+    const leading = q.match(LEADING_AREA_HINT_PATTERN)?.[1];
+    if (leading) push(leading);
   }
 
   for (const match of q.matchAll(LOCATION_PATTERN)) {

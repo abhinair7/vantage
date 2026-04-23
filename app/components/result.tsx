@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { DemoResult, NarrativeChunk } from "../lib/demo-results";
-import { detectSubject, subjectLabel } from "../lib/query-intel";
+import { detectMeasurementIntent, detectSubject, subjectLabel } from "../lib/query-intel";
 import { MapView, type MapHandle } from "./map-view";
 
 const EASE = [0.22, 0.61, 0.36, 1] as const;
@@ -308,6 +308,7 @@ function renderChunk(
 }
 
 function deriveSections(result: DemoResult): NarrativeSection[] {
+  const measurementIntent = detectMeasurementIntent(result.query);
   const labelsByMode: Record<DemoResult["mode"], string[]> = {
     investigate: [
       "Operating picture",
@@ -335,11 +336,20 @@ function deriveSections(result: DemoResult): NarrativeSection[] {
     "What to change next",
   ];
 
+  const measurementLabels = [
+    "Resolved site",
+    "Footprint read",
+    "Confidence and limits",
+    "Recommended next step",
+  ];
+
   return result.narrative.map((chunk, index) => ({
     ...chunk,
     title:
       result.kind === "insufficient"
         ? withheldLabels[index] ?? "Why the brief stopped here"
+        : measurementIntent === "footprint"
+          ? measurementLabels[index] ?? `Supporting point ${index + 1}`
         : labelsByMode[result.mode][index] ?? `Supporting point ${index + 1}`,
   }));
 }
@@ -347,6 +357,7 @@ function deriveSections(result: DemoResult): NarrativeSection[] {
 function deriveBriefCards(result: DemoResult): BriefCard[] {
   const subject = detectSubject(result.query);
   const subjectText = subjectLabel(subject);
+  const measurementIntent = detectMeasurementIntent(result.query);
 
   if (result.kind === "insufficient") {
     return [
@@ -364,6 +375,26 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
         label: "Next move",
         title: "Add specificity",
         body: "Include the operator, coordinates, or a cleaner place reference before you run this again.",
+      },
+    ];
+  }
+
+  if (measurementIntent === "footprint") {
+    return [
+      {
+        label: "Recommendation",
+        title: "Use as mapped baseline",
+        body: `Treat this as a current mapped-area read. ${Math.round(result.confidence * 100)}% confidence is enough for sizing and scoping, not for pretending this is a fresh as-built survey.`,
+      },
+      {
+        label: "Why it matters",
+        title: "Site sizing reference",
+        body: `The useful output here is direct: a grounded footprint number for the resolved ${subjectText}, so planning, diligence, and fieldwork start from the same spatial reference.`,
+      },
+      {
+        label: "Decision posture",
+        title: "Do not overstate recency",
+        body: "Use this for current mapped footprint. If the real question is live occupancy, recent expansion, or built-up change, switch to an imagery pass next.",
       },
     ];
   }
@@ -409,8 +440,14 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
 }
 
 function deriveTopline(result: DemoResult): string {
+  const measurementIntent = detectMeasurementIntent(result.query);
+
   if (result.kind === "insufficient") {
     return "The system stopped at the evidence floor rather than filling the gap with generic AI prose.";
+  }
+
+  if (measurementIntent === "footprint") {
+    return "Best used as a direct mapped-footprint read, with the limit that map geometry can lag real-world construction or site edits.";
   }
 
   if (result.mode === "verify") {
