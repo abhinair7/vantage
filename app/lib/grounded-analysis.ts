@@ -115,6 +115,7 @@ type ResolvedPlace = {
   importance?: number;
   sourceUrl?: string;
   geometry?: SurfaceGeometry;
+  geometryType?: string;
 };
 
 type OverpassElement = {
@@ -646,6 +647,7 @@ function scorePlaceCandidate(
   }
   if (placeMatchesSubject(className, typeName, subject, text)) score += 1.8;
   if (isSpecificSiteCandidate(className, typeName)) score += 0.35;
+  if (lowerQuery.includes("station") && /駅/.test(candidate.display_name)) score += 3.1;
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
   if (className === "place" && (typeName === "city" || typeName === "town" || typeName === "village")) score += 0.7;
   const broadCandidate = isBroadCandidate(candidate);
@@ -860,6 +862,7 @@ function normalizePlace(place: NominatimPlace): ResolvedPlace {
     importance: place.importance,
     sourceUrl: buildOsmObjectUrl(place.osm_type, place.osm_id, [lon, lat]),
     geometry: normalizeSurfaceGeometry(place.geojson),
+    geometryType: place.geojson?.type,
   };
 }
 
@@ -878,7 +881,12 @@ function buildFootprintResult(
   mode: AnalysisMode,
   place: ResolvedPlace,
 ): DemoResult | null {
-  if (!place.geometry) return null;
+  if (!place.geometry) {
+    if (place.geometryType && place.geometryType !== "Point" && place.geometryType !== "MultiPoint") {
+      return buildGeometryUnavailableResult(query, mode, place);
+    }
+    return null;
+  }
   if (isBroadPlace(place) || place.className === "boundary" || place.typeName === "administrative") {
     return null;
   }
@@ -938,6 +946,73 @@ function buildFootprintResult(
       "Best next step for higher confidence: compare the map geometry against a recent satellite image and redraw if the site has changed.",
     ],
     kind: "answer",
+  };
+}
+
+function buildGeometryUnavailableResult(
+  query: string,
+  mode: AnalysisMode,
+  place: ResolvedPlace,
+): DemoResult {
+  const placeLabel = titleCase(place.name);
+
+  return {
+    id: `footprint_unavailable_${hash(query).toString(16)}`,
+    query,
+    headline: `${placeLabel} resolved, but the current public map record does not include an areal footprint.`,
+    narrative: [
+      {
+        text: `${placeLabel} matched as a specific mapped place, but the available OpenStreetMap geometry is ${place.geometryType?.toLowerCase() ?? "non-areal"} rather than a polygon. That means Vantage can anchor the location, but it cannot honestly compute a surface-area footprint from this public record alone.`,
+        refs: ["e1"],
+      },
+      {
+        text: "This is still useful because the location itself is no longer ambiguous. The limitation is geometric, not geocoding-related.",
+        refs: ["e1"],
+      },
+      {
+        text: "Best next step: use a recent satellite image or another polygon-bearing source to trace the station, terminal, or campus boundary before quoting area.",
+        refs: [],
+      },
+    ],
+    evidence: [
+      {
+        id: "e1",
+        kind: "entity",
+        claim: `${placeLabel} resolved to a specific map object, but that object is stored as ${place.geometryType?.toLowerCase() ?? "non-areal"} geometry rather than a polygon.`,
+        source: `OpenStreetMap geometry · ${place.className}/${place.typeName}`,
+        sourceUrl: place.sourceUrl,
+        hash: hexHash(`footprint-unavailable:${query}:${place.osmType}:${place.osmId}:${place.geometryType}`),
+      },
+    ],
+    aoi: {
+      center: place.center,
+      zoom: Math.min(16.4, chooseZoom(place.bbox) + 0.8),
+      polygons: [
+        {
+          label: placeLabel,
+          date: "Resolved location",
+          coords: buildPlacePolygonCoords(place),
+          accent: "current",
+          evidenceRef: "e1",
+        },
+      ],
+      evidenceFocus: {
+        e1: {
+          center: place.center,
+          zoom: Math.min(16.8, chooseZoom(place.bbox) + 1),
+        },
+      },
+    },
+    confidence: 0.69,
+    mode,
+    tookMs: 1500,
+    methodology: [
+      "Resolved the place with OpenStreetMap Nominatim.",
+      "The returned map object is non-areal geometry, so no square-metre footprint was computed.",
+      "This is an honest geometry limitation, not a failure to identify the location.",
+      "Best next step: use imagery or another polygon-bearing source to draw the footprint.",
+    ],
+    kind: "insufficient",
   };
 }
 
