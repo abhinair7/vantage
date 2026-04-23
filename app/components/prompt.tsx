@@ -142,10 +142,7 @@ function HeroFull({
     <section className="hero">
       <div className="hero-scrim" aria-hidden />
       <div className="hero-header">
-        <p className="hero-wordmark-kicker">
-          Orbital intelligence for diligence, monitoring, and planning
-        </p>
-        <div className="hero-wordmark">VANTAGE</div>
+        <h1 className="hero-wordmark">VANTAGE</h1>
       </div>
 
       <div className="hero-content">

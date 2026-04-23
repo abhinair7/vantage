@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Bebas_Neue, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Bebas_Neue, JetBrains_Mono, Cinzel } from "next/font/google";
 import "./globals.css";
 
 // Body — Space Grotesk. Warm, slightly quirky geometric sans that carries the
@@ -27,6 +27,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const cinzel = Cinzel({
+  variable: "--font-cinzel",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Vantage — Ask Earth anything.",
   description:
@@ -48,7 +55,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${bebas.variable} ${jetbrainsMono.variable}`}
+      className={`${spaceGrotesk.variable} ${bebas.variable} ${jetbrainsMono.variable} ${cinzel.variable}`}
     >
       <body>{children}</body>
     </html>

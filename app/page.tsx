@@ -128,7 +128,7 @@ export default function Home() {
 
   const handleReset = useCallback(() => {
     setPhase({ kind: "idle" });
-    // Return to the top so the hero scroll animation replays naturally
+    // Return to the top so the landing composition is fully visible again
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -145,8 +145,8 @@ export default function Home() {
           unmounts once we transition to the answer (done). */}
       {phase.kind !== "done" && <HeroGlobe />}
 
-      {/* Orbital foreground layer — vignette, glints, and near-camera
-          debris hints. Rides on top of the globe but below any
+      {/* Orbital foreground layer — vignette, rift light, and nebula
+          detail. Rides on top of the globe but below any
           foreground UI. Only shown while the hero is in view. */}
       {phase.kind !== "done" && <TelescopeReticle />}
 
