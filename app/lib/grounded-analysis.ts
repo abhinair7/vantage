@@ -537,7 +537,8 @@ function scorePlaceCandidate(
     (candidate.name || candidate.display_name.split(",")[0]?.trim() || "").toLowerCase();
   const className = (candidate.class ?? candidate.category ?? "").toLowerCase();
   const typeName = candidate.type?.toLowerCase() ?? candidate.addresstype?.toLowerCase() ?? "";
-  const text = `${name} ${candidate.display_name}`.toLowerCase();
+  const text = `${name} ${typeName} ${candidate.display_name}`.toLowerCase();
+  const identityText = `${name} ${typeName} ${className}`.toLowerCase();
 
   let score = candidate.importance ?? 0;
 
@@ -546,8 +547,11 @@ function scorePlaceCandidate(
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
   if (className === "place" && (typeName === "city" || typeName === "town" || typeName === "village")) score += 0.7;
 
-  if (looksLikeStreetLevelCandidate(text, className, typeName)) score -= 2.6;
-  if (!placeMatchesSubject(className, typeName, subject, text) && looksLikeStreetLevelCandidate(text, className, typeName)) {
+  if (looksLikeStreetLevelCandidate(identityText, className, typeName)) score -= 2.6;
+  if (
+    !placeMatchesSubject(className, typeName, subject, text) &&
+    looksLikeStreetLevelCandidate(identityText, className, typeName)
+  ) {
     score -= 0.6;
   }
 
@@ -614,6 +618,19 @@ function subjectQueryTerms(subject: Subject): string[] {
     case "airbase":
     case "aircraft":
       return ["airport", "airbase", "airfield"];
+    case "facility":
+      return [
+        "facility",
+        "site",
+        "compound",
+        "installation",
+        "bus stand",
+        "bus station",
+        "bus terminal",
+        "station",
+        "terminal",
+        "depot",
+      ];
     default:
       return [subject.replace(/_/g, " ")];
   }
