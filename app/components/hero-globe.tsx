@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Stars } from "@react-three/drei";
 import { useMemo, useRef, useEffect, useState } from "react";
 import * as THREE from "three";
@@ -41,8 +41,6 @@ function useEarthTextures(): EarthTextures | null {
         if (cancelled) return;
         colorMap.colorSpace = THREE.SRGBColorSpace;
         cloudsMap.colorSpace = THREE.SRGBColorSpace;
-        colorMap.anisotropy = 8;
-        normalMap.anisotropy = 8;
         setTextures({ colorMap, normalMap, specularMap, cloudsMap });
       })
       .catch((err) => {
@@ -65,9 +63,17 @@ function Earth({
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
-  const specularColor = useMemo(() => new THREE.Color(0x7f97ac), []);
-  const normalScale = useMemo(() => new THREE.Vector2(0.78, 0.78), []);
-  const emissiveColor = useMemo(() => new THREE.Color(0x07131f), []);
+  const normalScale = useMemo(() => new THREE.Vector2(0.85, 0.85), []);
+  const emissiveColor = useMemo(() => new THREE.Color(0x050b14), []);
+  const gl = useThree((s) => s.gl);
+
+  useEffect(() => {
+    const max = gl.capabilities.getMaxAnisotropy();
+    [colorMap, normalMap, specularMap, cloudsMap].forEach((t) => {
+      t.anisotropy = max;
+      t.needsUpdate = true;
+    });
+  }, [gl, colorMap, normalMap, specularMap, cloudsMap]);
 
   useFrame((state) => {
     const elapsed = state.clock.elapsedTime;
@@ -76,28 +82,30 @@ function Earth({
   });
 
   return (
-    <group position={[0, -0.15, 0]} rotation={[0.12, -0.36, -0.16]} scale={2.05}>
+    <group position={[0, -0.1, 0]} rotation={[0.12, -0.36, -0.16]} scale={1.75}>
       <mesh ref={earthRef}>
-        <sphereGeometry args={[1, 128, 128]} />
-        <meshPhongMaterial
+        <sphereGeometry args={[1, 256, 256]} />
+        <meshStandardMaterial
           map={colorMap}
           normalMap={normalMap}
-          specularMap={specularMap}
-          specular={specularColor}
-          shininess={18}
           normalScale={normalScale}
+          roughnessMap={specularMap}
+          roughness={0.92}
+          metalness={0}
           emissive={emissiveColor}
-          emissiveIntensity={0.14}
+          emissiveIntensity={0.12}
         />
       </mesh>
 
       <mesh ref={cloudsRef} scale={1.006}>
-        <sphereGeometry args={[1, 96, 96]} />
-        <meshPhongMaterial
+        <sphereGeometry args={[1, 128, 128]} />
+        <meshStandardMaterial
           map={cloudsMap}
           transparent
-          opacity={0.18}
+          opacity={0.2}
           depthWrite={false}
+          roughness={1}
+          metalness={0}
         />
       </mesh>
     </group>
@@ -180,23 +188,25 @@ export function HeroGlobe() {
       }}
     >
       <Canvas
-        camera={{ position: [0, 0.52, 5.9], fov: 30 }}
+        camera={{ position: [0, 0.45, 6.4], fov: 25 }}
         dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          powerPreference: "high-performance",
+          toneMapping: THREE.ACESFilmicToneMapping,
+        }}
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.16} />
+        <ambientLight intensity={0.06} />
         <hemisphereLight
-          intensity={0.26}
-          color="#e2ebf3"
-          groundColor="#02060c"
+          intensity={0.18}
+          color="#dce7f1"
+          groundColor="#020509"
         />
-        <directionalLight position={[7, 6, 6]} intensity={2.1} color="#f8f4ea" />
-        <directionalLight position={[-6, 3, 4]} intensity={0.3} color="#87a8c0" />
-        <directionalLight position={[-5, -3, -4]} intensity={0.14} color="#213446" />
-        <pointLight position={[3.4, 2.8, 5]} intensity={0.74} color="#fff6da" />
-        <pointLight position={[-4, 0.2, 4]} intensity={0.2} color="#7ab1d1" />
+        <directionalLight position={[7, 5, 6]} intensity={2.8} color="#fff7e6" />
+        <directionalLight position={[-6, 2, 3]} intensity={0.22} color="#6f94b2" />
 
         <Stars
           radius={120}
