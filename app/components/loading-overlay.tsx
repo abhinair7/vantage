@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CUSTOMER_PIPELINE } from "../lib/pipeline";
-import type { DemoResult } from "../lib/demo-results";
+import type { AnalysisRunProfile } from "../lib/demo-results";
 
 type Props = {
   query: string;
-  result: DemoResult;
+  profile: AnalysisRunProfile;
   onDone: () => void;
 };
 
@@ -22,12 +22,12 @@ type Props = {
  * progressively reveal — it feels like a real AI tool watching itself
  * think, not a progress bar pretending to be busy.
  */
-export function LoadingOverlay({ query, result, onDone }: Props) {
+export function LoadingOverlay({ query, profile, onDone }: Props) {
   const [step, setStep] = useState(0);
   const total = CUSTOMER_PIPELINE.length;
   // Stretch a bit per step so the six-beat rhythm feels deliberate, not
   // rushed — but never faster than the pretend-latency on the result.
-  const perStep = Math.max(260, Math.round(result.tookMs / total));
+  const perStep = Math.max(260, Math.round(profile.tookMs / total));
 
   useEffect(() => {
     let i = 0;
@@ -43,7 +43,7 @@ export function LoadingOverlay({ query, result, onDone }: Props) {
     }, perStep);
     return () => window.clearInterval(tick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result.id]);
+  }, [profile.id]);
 
   const progress = Math.min(1, (step + 1) / total);
   const activeStep = CUSTOMER_PIPELINE[Math.min(step, total - 1)];

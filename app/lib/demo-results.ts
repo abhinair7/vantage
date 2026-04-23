@@ -7,13 +7,12 @@
  * fixtures so the prototype is a working demo without live API dependencies.
  */
 
-import { synthesize } from "./synthesize";
-
 export type Evidence = {
   id: string;           // short id used in narrative refs
   kind: "image" | "sar" | "ais" | "event" | "entity" | "measurement";
   claim: string;        // short human claim
   source: string;       // source + timestamp line
+  sourceUrl?: string;   // optional public URL for the cited source
   hash: string;         // SHA-like string — audit trail
 };
 
@@ -60,6 +59,11 @@ export type DemoResult = {
   tookMs: number;          // simulated processing time
   methodology: string[];   // bullets shown under "how this was computed"
   kind: "answer" | "insufficient";
+};
+
+export type AnalysisRunProfile = {
+  id: string;
+  tookMs: number;
 };
 
 /* ------------------------------------------------------------------
@@ -484,15 +488,44 @@ export function matchPresetQuery(q: string): DemoResult | null {
   return null;
 }
 
-/**
- * Keyword-scores an incoming query against the hand-authored preset set.
- * If nothing scores above the threshold, the synthesizer takes over so the
- * user still gets a structured, plausible-looking answer.
- */
-export function matchQuery(q: string): DemoResult {
+export function estimateRunProfile(q: string): AnalysisRunProfile {
   const preset = matchPresetQuery(q);
-  if (preset) return preset;
-  return synthesize(q);
+  if (preset) {
+    return {
+      id: preset.id,
+      tookMs: preset.tookMs,
+    };
+  }
+
+  return {
+    id: `run_${hashString(q).toString(16)}`,
+    tookMs: 2300 + (hashString(`${q}:latency`) % 1200),
+  };
+}
+
+export function buildUnavailableResult(query: string): DemoResult {
+  return {
+    id: `unavailable_${hashString(query).toString(16)}`,
+    query,
+    headline: "Analysis unavailable right now. No synthetic answer was shown in its place.",
+    narrative: [
+      {
+        text:
+          "The request did not complete cleanly, so Vantage withheld the brief rather than filling the gap with generated analysis. That protects the decision flow, but it means this run is incomplete.",
+        refs: [],
+      },
+    ],
+    evidence: [],
+    confidence: 0,
+    mode: "investigate",
+    tookMs: 1200,
+    methodology: [
+      "The live analysis request failed before a grounded evidence packet was returned.",
+      "No fallback synthesis was used, by design.",
+      "Best next step: retry the same prompt once the network path is healthy, or narrow the location and operator in the query.",
+    ],
+    kind: "insufficient",
+  };
 }
 
 export const EXAMPLE_PROMPTS: { label: string; query: string }[] = [
@@ -500,3 +533,12 @@ export const EXAMPLE_PROMPTS: { label: string; query: string }[] = [
   { label: "Cushing oil storage", query: CUSHING.query },
   { label: "Verify Shenzhen facility", query: SHENZHEN.query },
 ];
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}

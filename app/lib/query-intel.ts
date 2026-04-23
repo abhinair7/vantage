@@ -50,6 +50,13 @@ const LOCATION_PATTERN =
 const TITLE_PATTERN = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
 const QUOTE_PATTERN = /["“]([^"”]{2,80})["”]/g;
 const GENERIC_HINTS = new Set([
+  "is",
+  "are",
+  "was",
+  "were",
+  "does",
+  "do",
+  "did",
   "has",
   "have",
   "verify",
@@ -159,6 +166,7 @@ export function subjectLabel(subject: Subject): string {
 
 function normalizeHint(value: string): string {
   const normalized = value
+    .replace(/^(?:is|are|was|were|does|do|did|has|have|can|could|should|would|will)\b/gi, " ")
     .replace(/\b(?:the|a|an|this|that|these|those)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()

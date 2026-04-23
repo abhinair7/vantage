@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Bebas_Neue, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-/**
- * Typography: on macOS/iOS the browser will resolve `-apple-system` →
- * SF Pro Display/Text automatically; Inter is the cross-platform fallback
- * closest to SF's metrics so the display type doesn't shift on Windows/Linux.
- */
-const inter = Inter({
-  variable: "--font-sf",
+// Body — Space Grotesk. Warm, slightly quirky geometric sans that carries the
+// Mamdani-campaign Neue-Haas-Grotesk feel with a friendlier vibe.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-body-sans",
   subsets: ["latin"],
   display: "swap",
   weight: ["400", "500", "600", "700"],
+});
+
+// Display — Bebas Neue. Tall, bold, condensed caps — the Zohran-for-NYC
+// poster headline look.
+const bebas = Bebas_Neue({
+  variable: "--font-poster",
+  subsets: ["latin"],
+  weight: ["400"],
+  display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -42,7 +48,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${spaceGrotesk.variable} ${bebas.variable} ${jetbrainsMono.variable}`}
     >
       <body>{children}</body>
     </html>

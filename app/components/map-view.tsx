@@ -116,7 +116,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
       },
       center: aoi.center,
       zoom: aoi.zoom,
-      attributionControl: { compact: true },
+      attributionControl: false,
       cooperativeGestures: false,
       canvasContextAttributes: { preserveDrawingBuffer: true },
     });
@@ -249,6 +249,8 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
         }}
       />
 
+      <div className="map-edge-fade" aria-hidden />
+
       {/* Top-right: basemap segmented control + zoom + fit */}
       <div
         className="map-chrome"
@@ -328,6 +330,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
           zIndex: 2,
         }}
       >
+        <div className="map-scene-pill">
+          <span className="mono">SATELLITE DEFAULT</span>
+        </div>
         {aoi.polygons.map((p) => (
           <div
             key={p.label}
@@ -353,12 +358,12 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
                 borderRadius: 2,
                 background:
                   p.accent === "current"
-                    ? "rgba(0, 113, 227, 0.3)"
-                    : "rgba(110, 110, 115, 0.25)",
+                    ? "rgba(125, 249, 255, 0.28)"
+                    : "rgba(253, 224, 71, 0.18)",
                 border:
                   p.accent === "current"
-                    ? "1.5px solid #0071E3"
-                    : "1.5px dashed #6E6E73",
+                    ? "1.5px solid #7DF9FF"
+                    : "1.5px dashed #FDE047",
               }}
             />
             <span
@@ -371,6 +376,11 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
           </div>
         ))}
       </div>
+
+      <div
+        className="map-attribution"
+        dangerouslySetInnerHTML={{ __html: BASEMAPS[basemap].attribution }}
+      />
 
       {/* Compare slider — only when both before and after polygons exist */}
       {enableCompare && hasBoth && (

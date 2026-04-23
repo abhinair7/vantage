@@ -12,7 +12,6 @@ const reveal = (delay = 0) => ({
   animate: { opacity: 1, y: 0 },
   transition: { duration: 0.6, delay, ease: EASE },
 });
-const shortSource = (source: string) => source.split("·")[0].trim();
 
 type Props = {
   result: DemoResult;
@@ -34,8 +33,11 @@ export function Result({ result, onReset }: Props) {
   const mapRef = useRef<MapHandle | null>(null);
   const sourcesRef = useRef<HTMLDetailsElement | null>(null);
   const [hoveredRef, setHoveredRef] = useState<string | null>(null);
+
   const briefCards = useMemo(() => deriveBriefCards(result), [result]);
   const sections = useMemo(() => deriveSections(result), [result]);
+  const sourceSummary = useMemo(() => deriveSourceSummary(result), [result]);
+  const topline = useMemo(() => deriveTopline(result), [result]);
 
   const openSources = useCallback(() => {
     if (sourcesRef.current && !sourcesRef.current.open) {
@@ -74,7 +76,7 @@ export function Result({ result, onReset }: Props) {
         paddingBottom: "4rem",
         display: "flex",
         flexDirection: "column",
-        gap: "1.5rem",
+        gap: "1.2rem",
         maxWidth: 1040,
         margin: "0 auto",
       }}
@@ -100,7 +102,41 @@ export function Result({ result, onReset }: Props) {
         <span>Back</span>
       </motion.button>
 
-      {!isInsufficient && result.aoi && (
+      <motion.div {...reveal(0.04)} className="card-tight result-decision-band">
+        <div className="result-decision-copy">
+          <div className="result-status-row">
+            <span
+              className="eyebrow"
+              style={{
+                color: isInsufficient ? "var(--bad)" : "var(--good)",
+              }}
+            >
+              {isInsufficient ? "BRIEF WITHHELD" : `DECISION BRIEF · ${result.mode.toUpperCase()}`}
+            </span>
+            <span className="mono result-meta-pill">{(result.tookMs / 1000).toFixed(2)}s</span>
+            {!isInsufficient && (
+              <span className="mono result-meta-pill">
+                {Math.round(result.confidence * 100)}% confidence
+              </span>
+            )}
+          </div>
+
+          <h2 className="display-md result-decision-headline">{result.headline}</h2>
+          <p className="result-decision-topline">{topline}</p>
+        </div>
+
+        <div className="result-brief-grid">
+          {briefCards.map((card) => (
+            <article key={card.label} className="card-tight result-brief-card">
+              <span className="eyebrow">{card.label}</span>
+              <h3>{card.title}</h3>
+              <p>{card.body}</p>
+            </article>
+          ))}
+        </div>
+      </motion.div>
+
+      {result.aoi && (
         <motion.div
           className="card card-lifted result-map"
           initial={{ opacity: 0, y: 10, scale: 0.99 }}
@@ -121,107 +157,19 @@ export function Result({ result, onReset }: Props) {
             onFeatureClick={(id) => {
               focusEvidence(id);
               setHoveredRef(id);
-              window.setTimeout(() => setHoveredRef((value) => (value === id ? null : value)), 1400);
+              window.setTimeout(() => {
+                setHoveredRef((value) => (value === id ? null : value));
+              }, 1400);
             }}
           />
         </motion.div>
       )}
 
-      <motion.div {...reveal(0.05)}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.6rem",
-            marginBottom: "0.9rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <span
-            className="eyebrow"
-            style={{
-              color: isInsufficient ? "var(--bad)" : "var(--good)",
-            }}
-          >
-            {isInsufficient ? "INSUFFICIENT EVIDENCE" : `DECISION BRIEF · ${result.mode.toUpperCase()}`}
-          </span>
-          <span className="mono" style={{ color: "var(--fg-4)", fontSize: 11 }}>
-            {(result.tookMs / 1000).toFixed(2)}s
-          </span>
-          {!isInsufficient && (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-              aria-label={`Confidence ${(result.confidence * 100).toFixed(0)} percent`}
-            >
-              <span className="mono" style={{ color: "var(--fg-3)", fontSize: 11 }}>
-                {(result.confidence * 100).toFixed(0)}%
-              </span>
-              <div
-                aria-hidden
-                style={{
-                  flex: "0 0 120px",
-                  height: 3,
-                  background: "var(--line)",
-                  borderRadius: 999,
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: `${Math.round(result.confidence * 100)}%`,
-                    background: "var(--accent)",
-                    borderRadius: 999,
-                    transition: "width var(--t-slow) var(--ease-apple)",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <h2
-          className="display-md"
-          style={{
-            marginTop: 0,
-            marginBottom: 0,
-            letterSpacing: "-0.028em",
-            color: "var(--fg-1)",
-            fontFamily: "var(--font-serif)",
-            fontWeight: 500,
-            fontSize: 36,
-            lineHeight: 1.08,
-            maxWidth: "18ch",
-          }}
-        >
-          {result.headline}
-        </h2>
-      </motion.div>
-
-      <motion.div
-        {...reveal(0.12)}
-        className="result-brief-grid"
-      >
-        {briefCards.map((card) => (
-          <article key={card.label} className="card-tight result-brief-card">
-            <span className="eyebrow">{card.label}</span>
-            <h3>{card.title}</h3>
-            <p>{card.body}</p>
-          </article>
-        ))}
-      </motion.div>
-
       <div className="result-analysis-grid">
         {sections.map((section, index) => (
           <motion.article
             key={`${section.title}-${index}`}
-            {...reveal(0.18 + index * 0.08)}
+            {...reveal(0.14 + index * 0.06)}
             className="card-tight result-analysis-card"
             onMouseEnter={() => setHoveredRef(section.refs[0] ?? null)}
             onMouseLeave={() => setHoveredRef(null)}
@@ -238,38 +186,67 @@ export function Result({ result, onReset }: Props) {
 
       {!isInsufficient && result.evidence.length > 0 && (
         <motion.details
-          {...reveal(0.42)}
+          {...reveal(0.34)}
           ref={sourcesRef}
           className="card-tight result-accordion"
         >
-          <summary className="result-accordion-summary">
-            <span>Sourced evidence</span>
-            <span className="mono">{result.evidence.length}</span>
+          <summary className="result-accordion-summary result-accordion-summary--stacked">
+            <div>
+              <span>Sourced evidence pack</span>
+              <p className="result-accordion-note">
+                Compact by default. Expand for the full ledger and source links.
+              </p>
+            </div>
+
+            <div className="result-accordion-pills">
+              <span className="mono result-summary-pill">{result.evidence.length} refs</span>
+              {sourceSummary.map((item) => (
+                <span key={item} className="mono result-summary-pill">
+                  {item}
+                </span>
+              ))}
+            </div>
           </summary>
 
           <div className="result-source-list">
             {result.evidence.map((e) => {
               const isFocused = hoveredRef === e.id;
               return (
-                <button
-                  type="button"
+                <div
                   key={e.id}
-                  id={e.id}
                   className={`result-source-row${isFocused ? " is-focused" : ""}`}
-                  onClick={() => focusEvidence(e.id)}
-                  onMouseEnter={() => setHoveredRef(e.id)}
-                  onMouseLeave={() => setHoveredRef(null)}
-                  title={`${e.claim} — ${e.source}`}
                 >
-                  <span className="evidence-ref">{e.id}</span>
-                  <div className="result-source-copy">
-                    <div>{e.claim}</div>
-                    <div className="mono">
-                      {e.kind.toUpperCase()} · {e.source}
+                  <button
+                    type="button"
+                    id={e.id}
+                    className="result-source-main"
+                    onClick={() => focusEvidence(e.id)}
+                    onMouseEnter={() => setHoveredRef(e.id)}
+                    onMouseLeave={() => setHoveredRef(null)}
+                    title={`${e.claim} — ${e.source}`}
+                  >
+                    <span className="evidence-ref">{e.id}</span>
+                    <div className="result-source-copy">
+                      <div>{e.claim}</div>
+                      <div className="mono">
+                        {e.kind.toUpperCase()} · {e.source}
+                      </div>
                     </div>
-                  </div>
-                  <span className="mono result-source-short">{shortSource(e.source)}</span>
-                </button>
+                    <span className="mono result-source-short">{shortSource(e.source)}</span>
+                  </button>
+
+                  {e.sourceUrl && (
+                    <a
+                      href={e.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="result-source-link"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      Open
+                    </a>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -278,11 +255,11 @@ export function Result({ result, onReset }: Props) {
 
       {result.methodology.length > 0 && (
         <motion.details
-          {...reveal(0.5)}
+          {...reveal(0.4)}
           className="card-tight result-accordion"
         >
           <summary className="result-accordion-summary">
-            <span>How this was built</span>
+            <span>Method and limits</span>
             <span className="mono">{result.methodology.length}</span>
           </summary>
           <ul className="result-method-list">
@@ -332,18 +309,38 @@ function renderChunk(
 
 function deriveSections(result: DemoResult): NarrativeSection[] {
   const labelsByMode: Record<DemoResult["mode"], string[]> = {
-    investigate: ["Executive call", "Commercial implication", "Decision use", "Counter-case"],
-    verify: ["Verification call", "Risk relevance", "Decision use", "Residual uncertainty"],
-    monitor: ["Trend call", "Business implication", "What to watch next", "What could change the call"],
+    investigate: [
+      "Operating picture",
+      "Commercial read-through",
+      "Confidence and limits",
+      "Recommended next step",
+    ],
+    verify: [
+      "Site validation",
+      "Risk relevance",
+      "Confidence and limits",
+      "Recommended next step",
+    ],
+    monitor: [
+      "Operating picture",
+      "Signal read-through",
+      "Confidence and limits",
+      "Recommended next step",
+    ],
   };
 
-  const fallbackLabels = labelsByMode[result.mode];
+  const withheldLabels = [
+    "Why the brief was withheld",
+    "What limited the read",
+    "What to change next",
+  ];
+
   return result.narrative.map((chunk, index) => ({
     ...chunk,
     title:
       result.kind === "insufficient"
-        ? "Why the answer was withheld"
-        : fallbackLabels[index] ?? `Supporting point ${index + 1}`,
+        ? withheldLabels[index] ?? "Why the brief stopped here"
+        : labelsByMode[result.mode][index] ?? `Supporting point ${index + 1}`,
   }));
 }
 
@@ -355,18 +352,18 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
     return [
       {
         label: "Decision",
-        title: "Hold",
+        title: "Hold the call",
         body: "Do not treat this as decision-grade yet. The grounded signal did not clear the bar.",
       },
       {
         label: "Why",
-        title: "Evidence gap",
-        body: "The system could not resolve enough location or source context to make a credible call.",
+        title: "Evidence floor missed",
+        body: "The system found either too little location context or too little source diversity to support a credible brief.",
       },
       {
         label: "Next move",
         title: "Add specificity",
-        body: "Include the operator, coordinates, or a cleaner place reference before running this again.",
+        body: "Include the operator, coordinates, or a cleaner place reference before you run this again.",
       },
     ];
   }
@@ -378,6 +375,13 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
         ? "Add to watchlist"
         : "Escalate selectively";
 
+  const useTitle =
+    result.mode === "verify"
+      ? "Diligence kickoff"
+      : result.mode === "monitor"
+        ? "Monitoring frame"
+        : "Triage brief";
+
   const impactTitle =
     subject === "port" || subject === "vessel"
       ? "Supply-chain exposure"
@@ -385,30 +389,44 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
         ? "Market-moving asset"
         : "Strategic site relevance";
 
-  const nextMoveTitle =
-    result.mode === "verify"
-      ? "Check ownership and counterparties"
-      : result.mode === "monitor"
-        ? "Stand up recurring collection"
-        : "Point deeper EO here";
-
   return [
     {
-      label: "Decision",
+      label: "Recommendation",
       title: decisionTitle,
-      body: `Confidence is ${(result.confidence * 100).toFixed(0)}%, which is enough to use this as a triage input rather than a final memo.`,
+      body: `Use this as a ${useTitle.toLowerCase()}, not as the final memo. ${Math.round(result.confidence * 100)}% confidence is enough to move the next decision, not skip it.`,
     },
     {
-      label: "Business impact",
+      label: "Why it matters",
       title: impactTitle,
-      body: `The question is really about a ${subjectText} signal and whether it matters enough to move risk, spend, or timing.`,
+      body: `The business question is really about a ${subjectText} signal and whether it matters enough to move risk, spend, timing, or follow-on work.`,
     },
     {
-      label: "Next move",
-      title: nextMoveTitle,
+      label: "Decision posture",
+      title: result.mode === "monitor" ? "Stay honest on trend claims" : "Keep one foot on the brake",
       body: nextMoveCopy(result.mode, subject),
     },
   ];
+}
+
+function deriveTopline(result: DemoResult): string {
+  if (result.kind === "insufficient") {
+    return "The system stopped at the evidence floor rather than filling the gap with generic AI prose.";
+  }
+
+  if (result.mode === "verify") {
+    return "Best used to validate that the site is real, relevant, and worth deeper diligence.";
+  }
+
+  if (result.mode === "monitor") {
+    return "Best used to frame a watchlist and decide what recurring collection should be aimed here next.";
+  }
+
+  return "Best used as a strategic or operational triage brief to decide whether this deserves more analyst time.";
+}
+
+function deriveSourceSummary(result: DemoResult): string[] {
+  const unique = Array.from(new Set(result.evidence.map((item) => shortSource(item.source))));
+  return unique.slice(0, 3);
 }
 
 function nextMoveCopy(mode: DemoResult["mode"], subject: string): string {
@@ -416,10 +434,14 @@ function nextMoveCopy(mode: DemoResult["mode"], subject: string): string {
     return "Follow with operator-chain checks, sanctions screening, and a fresh imagery pass before you treat the site as cleared.";
   }
   if (mode === "monitor") {
-    return "Keep the satellite map as the operational frame, then add recurring imagery and traffic feeds to turn this into a real watchlist signal.";
+    return "Keep the satellite map as the operational frame, then add recurring imagery and movement feeds before you claim the trend is real.";
   }
   if (subject === "construction" || subject === "port" || subject === "storage") {
-    return "The next honest step is time-series collection, not more prose. This already tells you where to point it.";
+    return "The next honest step is time-series collection, not more narrative polish. This already tells you where to point it.";
   }
   return "Use this to decide whether the site deserves another hour of analyst time, not to skip the next layer of diligence.";
+}
+
+function shortSource(source: string): string {
+  return source.split("·")[0].trim();
 }

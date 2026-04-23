@@ -116,7 +116,6 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
       value={value}
       setValue={setValue}
       submit={submit}
-      onSubmit={onSubmit}
       inputRef={ref}
       onKeyDown={onKeyDown}
       ghostPrompt={EXAMPLE_PROMPTS[exampleIndex]?.query ?? ""}
@@ -128,7 +127,6 @@ function HeroFull({
   value,
   setValue,
   submit,
-  onSubmit,
   inputRef,
   onKeyDown,
   ghostPrompt,
@@ -136,7 +134,6 @@ function HeroFull({
   value: string;
   setValue: (v: string) => void;
   submit: () => void;
-  onSubmit: (q: string) => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   ghostPrompt: string;
@@ -147,17 +144,75 @@ function HeroFull({
 
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">
+          <div className="hero-signal-cloud" aria-hidden>
+            <article className="hero-signal-card hero-signal-card-1">
+              <span className="hero-signal-meta">SATELLITE READ</span>
+              <div className="hero-signal-visual hero-signal-visual--terrain">
+                <span />
+                <span />
+                <span />
+              </div>
+              <h3>See change before it hits the briefing room</h3>
+              <p>Surface growth, berth use, storage fill, and operating pressure in one frame.</p>
+            </article>
+
+            <article className="hero-signal-card hero-signal-card-2">
+              <span className="hero-signal-meta">ENTITY GRAPH</span>
+              <div className="hero-signal-visual hero-signal-visual--graph">
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <h3>Connect the site to the operator story</h3>
+              <p>Place context, ownership clues, and operating relevance stitched into one brief.</p>
+            </article>
+
+            <article className="hero-signal-card hero-signal-card-3">
+              <span className="hero-signal-meta">WATCHLIST VIEW</span>
+              <div className="hero-signal-visual hero-signal-visual--brief">
+                <span />
+                <span />
+                <span />
+              </div>
+              <h3>Turn open sources into a real decision surface</h3>
+              <p>Built for diligence, monitoring, and strategic or operational triage.</p>
+            </article>
+          </div>
+
           <div className="hero-copy hero-copy--centered">
+            <div className="hero-kicker-row">
+              <span className="hero-kicker">SITE DILIGENCE</span>
+              <span className="hero-kicker-divider" aria-hidden />
+              <span className="hero-kicker">CHANGE MONITORING</span>
+              <span className="hero-kicker-divider" aria-hidden />
+              <span className="hero-kicker">OPERATING DECISIONS</span>
+            </div>
+
             <div className="hero-caption">
-              <h1 className="display-serif hero-headline hero-headline--pastel">
-                See the site.<br />
-                <em>Know</em> the story.
+              <h1 className="display-serif hero-headline hero-headline--premium">
+                Find the site.<br />
+                <em>Make</em> the call.
               </h1>
-              <p className="hero-sub hero-sub--pastel">
-                One prompt pulls satellite imagery, infrastructure footprints, operator
-                records, and ownership graphs — then writes the brief so you can move
-                on the deal, not the research.
+              <p className="hero-sub hero-sub--premium">
+                Vantage turns open geospatial and public-entity data into a business
+                brief for diligence, monitoring, and strategic or operational decisions.
               </p>
+            </div>
+
+            <div className="hero-use-grid" aria-label="Primary Vantage use cases">
+              <article className="hero-use-card">
+                <span>Validate a facility or site</span>
+                <p>Confirm that a location is real, specific, and relevant before deeper diligence.</p>
+              </article>
+              <article className="hero-use-card">
+                <span>Track operational change</span>
+                <p>Use satellite-first context to frame what deserves recurring collection.</p>
+              </article>
+              <article className="hero-use-card">
+                <span>Brief a decision-maker fast</span>
+                <p>Convert raw public context into a concise call, limits, and next move.</p>
+              </article>
             </div>
           </div>
 
@@ -171,7 +226,7 @@ function HeroFull({
             >
               <div className="hero-input">
                 <div className="hero-input-shell">
-                  <span className="hero-input-label">TRY</span>
+                  <span className="hero-input-label">EXAMPLE PROMPT</span>
 
                   <AnimatePresence mode="wait">
                     {!value.trim() && (
@@ -212,22 +267,6 @@ function HeroFull({
                 </button>
               </div>
             </form>
-
-            <div className="hero-example-row">
-              {EXAMPLE_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt.query}
-                  type="button"
-                  className="hero-example-chip"
-                  onClick={() => {
-                    setValue(prompt.query);
-                    window.setTimeout(() => onSubmit(prompt.query), 80);
-                  }}
-                >
-                  {prompt.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </div>

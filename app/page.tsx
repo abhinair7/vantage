@@ -8,7 +8,12 @@ import { Result } from "./components/result";
 import { LoadingOverlay } from "./components/loading-overlay";
 import { SmoothScroll } from "./components/smooth-scroll";
 import { TelescopeReticle } from "./components/telescope-reticle";
-import { matchQuery, type DemoResult } from "./lib/demo-results";
+import {
+  buildUnavailableResult,
+  estimateRunProfile,
+  type AnalysisRunProfile,
+  type DemoResult,
+} from "./lib/demo-results";
 
 // 3D Earth — client-only, deferred to keep TTFB clean
 const HeroGlobe = dynamic(
@@ -21,7 +26,7 @@ type Phase =
   | {
       kind: "loading";
       query: string;
-      pending: DemoResult;
+      pending: AnalysisRunProfile;
       resolved?: DemoResult;
       requestId: number;
       ready: boolean;
@@ -46,7 +51,7 @@ export default function Home() {
   const requestRef = useRef(0);
 
   const handleAsk = useCallback((query: string) => {
-    const pending = matchQuery(query);
+    const pending = estimateRunProfile(query);
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
 
@@ -94,11 +99,13 @@ export default function Home() {
           if (current.kind !== "loading" || current.requestId !== requestId) {
             return current;
           }
+          const fallback = buildUnavailableResult(current.query);
           if (current.overlayDone) {
-            return { kind: "done", query: current.query, result: current.pending };
+            return { kind: "done", query: current.query, result: fallback };
           }
           return {
             ...current,
+            resolved: fallback,
             ready: true,
           };
         });
@@ -109,7 +116,11 @@ export default function Home() {
     setPhase((p) =>
       p.kind === "loading"
         ? p.ready
-          ? { kind: "done", query: p.query, result: p.resolved ?? p.pending }
+          ? {
+              kind: "done",
+              query: p.query,
+              result: p.resolved ?? buildUnavailableResult(p.query),
+            }
           : { ...p, overlayDone: true }
         : p
     );
@@ -156,7 +167,7 @@ export default function Home() {
           <LoadingOverlay
             key="loading-overlay"
             query={phase.query}
-            result={phase.pending}
+            profile={phase.pending}
             onDone={handleLoadingDone}
           />
         )}
