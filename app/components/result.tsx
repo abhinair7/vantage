@@ -184,7 +184,7 @@ export function Result({ result, onReset }: Props) {
         ))}
       </div>
 
-      {!isInsufficient && result.evidence.length > 0 && (
+      {result.evidence.length > 0 && (
         <motion.details
           {...reveal(0.34)}
           ref={sourcesRef}

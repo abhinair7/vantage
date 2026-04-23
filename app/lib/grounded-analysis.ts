@@ -14,6 +14,7 @@ import {
   subjectLabel,
   titleCase,
   type AnalysisMode,
+  type MeasurementIntent,
   type Subject,
 } from "./query-intel";
 
@@ -21,6 +22,8 @@ const USER_AGENT = "Vantage/0.1 (+https://vantage-blond-nu.vercel.app)";
 const REQUEST_TIMEOUT_MS = 6500;
 const CONFIDENCE_FLOOR = 0.58;
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
+const BARE_LOOKUP_DISQUALIFIERS =
+  /\b(?:worth|monitor|monitoring|track|tracking|verify|verification|confirm|check|checking|status|signal|signals|trend|trends|risk|disruption|throughput|traffic|activity|volume|utilization|utilisation|construction|growth|footprint|area|size|acreage|extent|sqm|sq\.?\s?m|m2|m²|square|hectare|hectares|ha|acre|acres|owner|owners|operator|operators|company|evidence|brief|decision|useful|important|real|exists|exist|legit|legitimate|safe|unsafe|now|today|since|over|under|during|last|past|next|total|current|latest|increased|decreased|change|changed|what|where|when|why|how|who)\b/i;
 const COMMON_LOCATION_SUFFIXES = [
   "industrial park",
   "logistics park",
@@ -283,7 +286,15 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
     Boolean(wiki);
 
   if (!hasSubstantiveContext || confidence < CONFIDENCE_FLOOR) {
-    return buildWithheldResult(query, mode, subject, place, confidence, topFeatures.length);
+    return buildWithheldResult(
+      query,
+      mode,
+      subject,
+      place,
+      confidence,
+      topFeatures.length,
+      measurementIntent,
+    );
   }
 
   const evidence: Evidence[] = [];
@@ -420,6 +431,18 @@ async function resolvePlace(
     }
   }
 
+  if (candidates.length === 0) {
+    const fuzzyQueries = buildSoftenedPlaceQueries(queries);
+    for (const hint of fuzzyQueries) {
+      const normalized = hint.trim().toLowerCase();
+      if (!normalized || seenQueries.has(normalized)) continue;
+      seenQueries.add(normalized);
+
+      const matches = await fetchNominatimSearch(hint, includeGeometry);
+      candidates.push(...matches);
+    }
+  }
+
   const best = pickBestPlace(candidates, query, subject);
   return best ? normalizePlace(best) : null;
 }
@@ -496,6 +519,27 @@ function buildAddressExpansionQueries(
   }
 
   return Array.from(expansions).sort((a, b) => b.length - a.length);
+}
+
+function buildSoftenedPlaceQueries(queries: string[]): string[] {
+  const variants = new Set<string>();
+
+  for (const query of queries) {
+    const softened = softenPlaceSpelling(query);
+    if (softened && softened.toLowerCase() !== query.trim().toLowerCase()) {
+      variants.add(softened);
+    }
+  }
+
+  return Array.from(variants);
+}
+
+function softenPlaceSpelling(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const softened = trimmed.replace(/([bdgkpt])h/gi, "$1");
+  return softened !== trimmed ? softened : null;
 }
 
 async function fetchNominatimSearch(
@@ -1357,22 +1401,46 @@ function buildWithheldResult(
   place: ResolvedPlace,
   confidence: number,
   featureCount: number,
+  measurementIntent: MeasurementIntent | null,
 ): DemoResult {
+  const placeLabel = titleCase(place.name);
+  const barePlaceLookup = isBarePlaceLookupQuery(query, mode, measurementIntent);
+  const placeEvidenceId = "e1";
+  const refs: EvidenceRefs = { place: placeEvidenceId };
+  const evidence: Evidence[] = [
+    {
+      id: placeEvidenceId,
+      kind: "entity",
+      claim: `${placeLabel} resolved to a canonical map object with a bounded area of interest.`,
+      source: `OpenStreetMap Nominatim · ${place.className}/${place.typeName}`,
+      sourceUrl: place.sourceUrl,
+      hash: hexHash(`withheld-geo:${query}:${place.displayName}`),
+    },
+  ];
+  const admin = compactAddress(place.address);
+
   return {
     id: `withheld_${hash(query).toString(16)}`,
     query,
-    headline: `Place match found for ${titleCase(place.name)}, but the evidence floor for a ${subjectLabel(subject)} brief was not met.`,
+    headline: barePlaceLookup
+      ? `${placeLabel} resolves to a mapped ${place.typeName.replace(/_/g, " ")} in ${admin}, but the prompt does not yet specify what to assess there.`
+      : `Place match found for ${placeLabel}, but the evidence floor for a ${subjectLabel(subject)} brief was not met.`,
     narrative: [
       {
-        text: `${titleCase(place.name)} resolved cleanly on the map, but the free-source stack did not return enough surrounding context to support a decision brief. The system withheld the call instead of padding the gap with generated certainty.`,
-        refs: [],
+        text: barePlaceLookup
+          ? `${placeLabel} resolves cleanly on the map as ${place.className}/${place.typeName} in ${admin}. The public stack can validate the place and anchor it on the map, but this prompt does not yet ask a concrete operational, strategic, or measurement question about it.`
+          : `${placeLabel} resolved cleanly on the map, but the free-source stack did not return enough surrounding context to support a decision brief. The system withheld the call instead of padding the gap with generated certainty.`,
+        refs: [placeEvidenceId],
       },
       {
-        text: `Confidence only reached ${Math.round(confidence * 100)}%. The limiting factor was source depth, not prose. ${featureCount > 0 ? `A few nearby signals appeared, but not enough to make the operating picture decision-grade.` : "The surrounding map context stayed too thin to move beyond place validation."}`,
-        refs: [],
+        text: barePlaceLookup
+          ? `Best next step: ask about a specific site, road, facility, footprint, operator, or trend inside ${placeLabel}. That gives Vantage something decision-grade to test instead of only geocoding the locality.`
+          : `Confidence only reached ${Math.round(confidence * 100)}%. The limiting factor was source depth, not prose. ${featureCount > 0 ? `A few nearby signals appeared, but not enough to make the operating picture decision-grade.` : "The surrounding map context stayed too thin to move beyond place validation."}`,
+        refs: barePlaceLookup ? [placeEvidenceId] : [],
       },
     ],
-    evidence: [],
+    evidence,
+    aoi: buildAoi(place, [], refs),
     confidence: Number(confidence.toFixed(2)),
     mode,
     tookMs: 2100,
@@ -1384,6 +1452,20 @@ function buildWithheldResult(
     ],
     kind: "insufficient",
   };
+}
+
+function isBarePlaceLookupQuery(
+  query: string,
+  mode: AnalysisMode,
+  measurementIntent: MeasurementIntent | null,
+): boolean {
+  const trimmed = query.trim();
+  if (!trimmed || mode !== "investigate" || measurementIntent) return false;
+  if (extractCoordinates(trimmed)) return false;
+  if (BARE_LOOKUP_DISQUALIFIERS.test(trimmed)) return false;
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 6;
 }
 
 function buildNoMatchResult(query: string): DemoResult {
