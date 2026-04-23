@@ -21,6 +21,39 @@ const USER_AGENT = "Vantage/0.1 (+https://vantage-blond-nu.vercel.app)";
 const REQUEST_TIMEOUT_MS = 6500;
 const CONFIDENCE_FLOOR = 0.58;
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
+const COMMON_LOCATION_SUFFIXES = [
+  "industrial park",
+  "logistics park",
+  "free zone",
+  "freezone",
+  "bus terminal",
+  "bus station",
+  "bus stand",
+  "railway station",
+  "air force base",
+  "power plant",
+  "data center",
+  "datacenter",
+  "airfield",
+  "aerodrome",
+  "airport",
+  "airbase",
+  "harbour",
+  "harbor",
+  "terminal",
+  "station",
+  "warehouse",
+  "factory",
+  "quarry",
+  "refinery",
+  "shipyard",
+  "railway",
+  "depot",
+  "yard",
+  "plant",
+  "port",
+  "site",
+];
 
 type NominatimPlace = {
   lat: string;
@@ -312,7 +345,7 @@ async function resolvePlace(
   const candidates: NominatimPlace[] = [];
   const seenQueries = new Set<string>();
 
-  const queries = [...extractLocationHints(query), query];
+  const queries = buildPlaceSearchQueries(query, subject);
   for (const hint of queries) {
     const normalized = hint.trim().toLowerCase();
     if (!normalized || seenQueries.has(normalized)) continue;
@@ -324,6 +357,54 @@ async function resolvePlace(
 
   const best = pickBestPlace(candidates, query, subject);
   return best ? normalizePlace(best) : null;
+}
+
+function buildPlaceSearchQueries(query: string, subject: Subject): string[] {
+  const queries: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (value?: string | null) => {
+    const normalized = value?.trim();
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    queries.push(normalized);
+  };
+
+  const hints = extractLocationHints(query);
+  hints.forEach((hint) => push(hint));
+  hints.forEach((hint) => {
+    buildFallbackPlaceHints(hint, subject).forEach((variant) => push(variant));
+  });
+  push(query);
+
+  return queries;
+}
+
+function buildFallbackPlaceHints(hint: string, subject: Subject): string[] {
+  const suffixes = Array.from(
+    new Set([
+      ...subjectSuffixes(subject),
+      ...COMMON_LOCATION_SUFFIXES,
+    ]),
+  ).sort((a, b) => b.length - a.length);
+
+  const variants: string[] = [];
+  let current = hint.trim();
+
+  for (const suffix of suffixes) {
+    const pattern = new RegExp(`\\b${escapeRegex(suffix)}\\b$`, "i");
+    if (!pattern.test(current)) continue;
+
+    const stripped = current.replace(pattern, "").trim().replace(/[,-]+$/, "").trim();
+    if (stripped && stripped !== current && stripped.split(/\s+/).length >= 1) {
+      variants.push(stripped);
+      current = stripped;
+    }
+  }
+
+  return variants;
 }
 
 async function fetchNominatimSearch(
@@ -681,6 +762,51 @@ function subjectQueryTerms(subject: Subject): string[] {
       ];
     default:
       return [subject.replace(/_/g, " ")];
+  }
+}
+
+function subjectSuffixes(subject: Subject): string[] {
+  switch (subject) {
+    case "port":
+    case "vessel":
+      return ["port", "harbour", "harbor", "terminal"];
+    case "airport":
+    case "airbase":
+    case "aircraft":
+      return ["airport", "airbase", "airfield", "aerodrome"];
+    case "railway":
+      return ["railway station", "railway", "station", "yard"];
+    case "storage":
+      return ["storage", "tank farm", "terminal", "depot"];
+    case "refinery":
+      return ["refinery", "plant"];
+    case "warehouse":
+      return ["warehouse", "logistics park", "depot"];
+    case "factory":
+      return ["factory", "plant"];
+    case "shipyard":
+      return ["shipyard", "drydock", "dry dock"];
+    case "power":
+      return ["power plant", "substation", "switchyard"];
+    case "datacenter":
+      return ["data center", "datacenter", "campus"];
+    case "facility":
+      return [
+        "bus stand",
+        "bus station",
+        "bus terminal",
+        "station",
+        "terminal",
+        "depot",
+        "free zone",
+        "freezone",
+        "industrial park",
+        "logistics park",
+        "facility",
+        "site",
+      ];
+    default:
+      return [];
   }
 }
 
@@ -1586,6 +1712,10 @@ function joinNatural(items: string[]): string {
   if (items.length === 1) return items[0];
   if (items.length === 2) return `${items[0]} and ${items[1]}`;
   return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
