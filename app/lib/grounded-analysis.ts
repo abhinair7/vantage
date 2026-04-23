@@ -544,8 +544,11 @@ function scorePlaceCandidate(
 
   if (name && lowerQuery.includes(name)) score += 1.4;
   if (placeMatchesSubject(className, typeName, subject, text)) score += 1.8;
+  if (isSpecificSiteCandidate(className, typeName)) score += 0.35;
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
   if (className === "place" && (typeName === "city" || typeName === "town" || typeName === "village")) score += 0.7;
+  if (isBroadCandidate(candidate)) score -= 0.4;
+  else score += 0.1;
 
   if (looksLikeStreetLevelCandidate(identityText, className, typeName)) score -= 2.6;
   if (
@@ -601,6 +604,51 @@ function looksLikeStreetLevelCandidate(text: string, className: string, typeName
     typeName === "house" ||
     className === "highway"
   );
+}
+
+function isSpecificSiteCandidate(className: string, typeName: string): boolean {
+  return (
+    [
+      "amenity",
+      "building",
+      "railway",
+      "aeroway",
+      "tourism",
+      "leisure",
+      "office",
+      "shop",
+      "industrial",
+      "man_made",
+      "power",
+      "waterway",
+      "public_transport",
+    ].includes(className) ||
+    [
+      "bus_station",
+      "station",
+      "terminal",
+      "airport",
+      "aerodrome",
+      "harbour",
+      "port",
+      "university",
+      "hospital",
+      "stadium",
+      "depot",
+      "factory",
+      "warehouse",
+    ].includes(typeName)
+  );
+}
+
+function isBroadCandidate(candidate: NominatimPlace): boolean {
+  const bbox = candidate.boundingbox?.map(Number);
+  if (!bbox || bbox.length !== 4 || bbox.some((value) => Number.isNaN(value))) {
+    return false;
+  }
+
+  const [south, north, west, east] = bbox;
+  return Math.max(Math.abs(north - south), Math.abs(east - west)) > 0.28;
 }
 
 function subjectQueryTerms(subject: Subject): string[] {
