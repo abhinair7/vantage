@@ -683,11 +683,156 @@ body {
   z-index: 0;
 }
 
-.telescope {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
+/* Telescope / lensing decorations removed — the globe stands on its own now. */
+
+/* ------------------------------------------------------------------
+   AirPods-clean result layout
+   Generous whitespace, one hero headline, thin typographic rhythm.
+   ------------------------------------------------------------------ */
+.result-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.2rem 0 0.25rem;
+  max-width: 780px;
+}
+.result-hero-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 12px;
+  color: var(--fg-4);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  margin: 0;
+}
+.result-hero-tag {
+  font-weight: 500;
+  color: var(--fg-2, #3a3a3c);
+  letter-spacing: -0.005em;
+}
+.result-hero-tag.is-bad {
+  color: var(--bad, #b11b1b);
+}
+.result-hero-headline {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.6vw, 46px);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.07;
+  color: var(--fg-1);
+  margin: 0;
+}
+.result-hero-topline {
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--fg-3, #6e6e73);
+  margin: 0;
+  max-width: 680px;
+  letter-spacing: -0.005em;
+}
+
+.result-brief-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.6rem 2rem;
+  padding: 1.6rem 0 0.5rem;
+  border-top: 1px solid var(--line);
+  margin-top: 0.4rem;
+}
+.result-brief-row:empty { display: none; }
+.result-brief-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.result-brief-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.result-brief-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+  margin: 0;
+}
+.result-brief-body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg-3, #6e6e73);
+  margin: 0;
+}
+
+.result-analysis-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+  padding: 1.6rem 0 0.2rem;
+  border-top: 1px solid var(--line);
+  margin-top: 0.2rem;
+  max-width: 760px;
+}
+.result-analysis-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.result-analysis-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  margin: 0;
+}
+.result-analysis-body {
+  font-size: 16px;
+  line-height: 1.62;
+  color: var(--fg-1);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.hero-analyzing {
+  margin-top: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  color: var(--fg-4);
+  letter-spacing: 0.01em;
+}
+.hero-analyzing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent, #0071e3);
+  animation: vantage-pulse 1.2s ease-in-out infinite;
+}
+.hero-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: vantage-spin 0.9s linear infinite;
+  display: inline-block;
+}
+@keyframes vantage-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes vantage-spin {
+  to { transform: rotate(360deg); }
+}
+
+.telescope--disabled {
+  display: none;
 }
 
 .telescope-vignette {

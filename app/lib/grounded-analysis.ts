@@ -421,31 +421,46 @@ async function buildGroundedAnalysis(
     news: newsEvidenceIds,
   };
 
-  const narrative = [
-    {
-      text: buildOperatingPictureLine(place, subject, context, wikidata, wiki, news),
-      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background, ...(refs.news ?? [])]),
-    },
-    {
-      text: buildBusinessLine(mode, subject, place, context, wikidata, news, barePlaceLookup),
-      refs: compactRefs([refs.context, refs.entity, refs.place, ...(refs.news ?? [])]),
-    },
-    {
-      text: buildConfidenceLine(
-        mode,
-        confidence,
-        topFeatures.length,
-        Boolean(wikidata),
-        Boolean(wiki),
-        news,
-      ),
-      refs: compactRefs([refs.place, refs.context, refs.entity, ...(refs.news ?? [])]),
-    },
-    {
-      text: buildNextStepLine(mode, subject, topFeatures.length > 0, Boolean(wikidata), Boolean(news)),
-      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background, ...(refs.news ?? [])]),
-    },
-  ];
+  // When recent local reporting exists, news leads the brief — everything
+  // else becomes supporting context. That matches how a human analyst would
+  // actually read the same evidence pack.
+  const narrative = news
+    ? [
+        {
+          text: buildNewsLeadLine(place, subject, news),
+          refs: compactRefs([...(refs.news ?? []), refs.place, refs.context]),
+        },
+        {
+          text: buildOperatingPictureLine(place, subject, context, wikidata, wiki, news),
+          refs: compactRefs([refs.place, refs.context, refs.entity, refs.background]),
+        },
+        {
+          text: buildBusinessLine(mode, subject, place, context, wikidata, news, barePlaceLookup),
+          refs: compactRefs([refs.context, refs.entity, refs.place, ...(refs.news ?? [])]),
+        },
+        {
+          text: buildNextStepLine(mode, subject, topFeatures.length > 0, Boolean(wikidata), Boolean(news)),
+          refs: compactRefs([refs.place, refs.context, refs.entity, refs.background, ...(refs.news ?? [])]),
+        },
+      ]
+    : [
+        {
+          text: buildOperatingPictureLine(place, subject, context, wikidata, wiki, news),
+          refs: compactRefs([refs.place, refs.context, refs.entity, refs.background]),
+        },
+        {
+          text: buildBusinessLine(mode, subject, place, context, wikidata, news, barePlaceLookup),
+          refs: compactRefs([refs.context, refs.entity, refs.place]),
+        },
+        {
+          text: buildConfidenceLine(mode, confidence, topFeatures.length, Boolean(wikidata), Boolean(wiki), news),
+          refs: compactRefs([refs.place, refs.context, refs.entity]),
+        },
+        {
+          text: buildNextStepLine(mode, subject, topFeatures.length > 0, Boolean(wikidata), Boolean(news)),
+          refs: compactRefs([refs.place, refs.context, refs.entity, refs.background]),
+        },
+      ];
 
   const baseMethodology = buildMethodology(
     subject,
@@ -1828,6 +1843,33 @@ function buildHeadline(
   }
 
   return `Escalate selectively on ${site}: the site resolves cleanly, the surrounding asset base makes the question commercially legible, and the current read is ${confidenceLabel} enough for triage rather than a final memo.${hasWikidata ? "" : " Entity metadata is still limited, so treat this as operating context first."}`;
+}
+
+function buildNewsLeadLine(
+  place: ResolvedPlace,
+  subject: Subject,
+  news: NewsSnapshot,
+): string {
+  const site = titleCase(place.name);
+  const top = news.articles[0];
+  const freshness =
+    news.freshestHours == null
+      ? "recent"
+      : news.freshestHours < 1
+        ? "just in"
+        : news.freshestHours < 24
+          ? `${Math.max(1, Math.round(news.freshestHours))}h ago`
+          : `${Math.round(news.freshestHours / 24)}d ago`;
+  const sourcesLine =
+    news.sourceNames.length > 0
+      ? `${joinNatural(news.sourceNames)} are the sources carrying it`
+      : "multiple independent outlets are carrying it";
+  const subjectHint = subjectLabel(subject);
+  const headline = top?.title
+    ? `"${top.title.replace(/\s+/g, " ").trim()}"`
+    : news.descriptor;
+
+  return `The live read on ${site} right now is ${news.dominantTheme}. The freshest local item, ${freshness}, reads ${headline}, and ${sourcesLine}. This is the part of the brief that actually moves a ${subjectHint} decision today — map data and entity graphs round it out, they don't replace it.`;
 }
 
 function buildOperatingPictureLine(

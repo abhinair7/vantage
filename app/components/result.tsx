@@ -173,39 +173,33 @@ export function Result({ result, onReset, onForceRun }: Props) {
         </motion.div>
       )}
 
-      <motion.div {...reveal(0.04)} className="card-tight result-decision-band">
-        <div className="result-decision-copy">
-          <div className="result-status-row">
-            <span
-              className="eyebrow"
-              style={{
-                color: isInsufficient ? "var(--bad)" : "var(--good)",
-              }}
-            >
-              {isInsufficient ? "BRIEF WITHHELD" : `DECISION BRIEF · ${result.mode.toUpperCase()}`}
-            </span>
-            <span className="mono result-meta-pill">{(result.tookMs / 1000).toFixed(2)}s</span>
-            {!isInsufficient && (
-              <span className="mono result-meta-pill">
-                {Math.round(result.confidence * 100)}% confidence
-              </span>
-            )}
+      <motion.header {...reveal(0.04)} className="result-hero">
+        <p className="result-hero-meta">
+          <span className={isInsufficient ? "result-hero-tag is-bad" : "result-hero-tag"}>
+            {isInsufficient ? "Brief withheld" : `${titleCaseMode(result.mode)} brief`}
+          </span>
+          {!isInsufficient && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{Math.round(result.confidence * 100)}% confidence</span>
+            </>
+          )}
+          <span aria-hidden>·</span>
+          <span>{(result.tookMs / 1000).toFixed(1)}s</span>
+        </p>
+        <h2 className="result-hero-headline">{result.headline}</h2>
+        <p className="result-hero-topline">{topline}</p>
+      </motion.header>
+
+      <div className="result-brief-row" aria-hidden={briefCards.length === 0}>
+        {briefCards.map((card) => (
+          <div key={card.label} className="result-brief-item">
+            <span className="result-brief-eyebrow">{card.label}</span>
+            <p className="result-brief-title">{card.title}</p>
+            <p className="result-brief-body">{card.body}</p>
           </div>
-
-          <h2 className="display-md result-decision-headline">{result.headline}</h2>
-          <p className="result-decision-topline">{topline}</p>
-        </div>
-
-        <div className="result-brief-grid">
-          {briefCards.map((card) => (
-            <article key={card.label} className="card-tight result-brief-card">
-              <span className="eyebrow">{card.label}</span>
-              <h3>{card.title}</h3>
-              <p>{card.body}</p>
-            </article>
-          ))}
-        </div>
-      </motion.div>
+        ))}
+      </div>
 
       {result.aoi && (
         <motion.div
@@ -236,22 +230,20 @@ export function Result({ result, onReset, onForceRun }: Props) {
         </motion.div>
       )}
 
-      <div className="result-analysis-grid">
+      <div className="result-analysis-flow">
         {sections.map((section, index) => (
-          <motion.article
+          <motion.section
             key={`${section.title}-${index}`}
-            {...reveal(0.14 + index * 0.06)}
-            className="card-tight result-analysis-card"
+            {...reveal(0.12 + index * 0.05)}
+            className="result-analysis-block"
             onMouseEnter={() => setHoveredRef(section.refs[0] ?? null)}
             onMouseLeave={() => setHoveredRef(null)}
           >
-            <div className="result-analysis-head">
-              <span className="eyebrow">{section.title}</span>
-            </div>
+            <p className="result-analysis-title">{section.title}</p>
             <p className="result-analysis-body">
               {renderChunk(section, hoveredRef, focusEvidence, setHoveredRef)}
             </p>
-          </motion.article>
+          </motion.section>
         ))}
       </div>
 
@@ -376,6 +368,10 @@ function renderChunk(
       )}
     </>
   );
+}
+
+function titleCaseMode(mode: DemoResult["mode"]): string {
+  return mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
 function deriveSections(result: DemoResult): NarrativeSection[] {

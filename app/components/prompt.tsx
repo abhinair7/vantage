@@ -8,6 +8,7 @@ type Props = {
   onSubmit: (q: string) => void;
   compact?: boolean;
   initialValue?: string;
+  loading?: boolean;
 };
 
 
@@ -23,7 +24,7 @@ type Props = {
  * Compact:
  *   - A slim glass header pinned to the top of the answer screen.
  */
-export function Prompt({ onSubmit, compact, initialValue }: Props) {
+export function Prompt({ onSubmit, compact, initialValue, loading = false }: Props) {
   const [value, setValue] = useState(initialValue ?? "");
   const [exampleIndex, setExampleIndex] = useState(0);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -119,6 +120,7 @@ export function Prompt({ onSubmit, compact, initialValue }: Props) {
       inputRef={ref}
       onKeyDown={onKeyDown}
       ghostPrompt={EXAMPLE_PROMPTS[exampleIndex]?.query ?? ""}
+      loading={loading}
     />
   );
 }
@@ -130,6 +132,7 @@ function HeroFull({
   inputRef,
   onKeyDown,
   ghostPrompt,
+  loading,
 }: {
   value: string;
   setValue: (v: string) => void;
@@ -137,6 +140,7 @@ function HeroFull({
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   ghostPrompt: string;
+  loading: boolean;
 }) {
   return (
     <section className="hero">
@@ -190,19 +194,39 @@ function HeroFull({
                   />
                 </div>
 
-                <button type="submit" aria-label="Ask" disabled={!value.trim()}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M12 19V5M12 5l-6 6M12 5l6 6"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                <button type="submit" aria-label="Ask" disabled={!value.trim() || loading}>
+                  {loading ? (
+                    <span className="hero-spinner" aria-hidden />
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M12 19V5M12 5l-6 6M12 5l6 6"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
                 </button>
               </div>
             </form>
+
+            <AnimatePresence>
+              {loading && (
+                <motion.p
+                  key="analyzing"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.25 }}
+                  className="hero-analyzing"
+                >
+                  <span className="hero-analyzing-dot" aria-hidden />
+                  Analyzing…
+                </motion.p>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>

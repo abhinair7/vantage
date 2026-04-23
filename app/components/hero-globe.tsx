@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas, useFrame, extend } from "@react-three/fiber";
-import { Stars, shaderMaterial } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Stars } from "@react-three/drei";
 import { useMemo, useRef, useEffect, useState } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
@@ -19,50 +19,6 @@ type EarthTextures = {
   specularMap: THREE.Texture;
   cloudsMap: THREE.Texture;
 };
-
-/* ---------- Fresnel atmosphere shader ---------- */
-const AtmosphereMaterial = shaderMaterial(
-  {
-    glowColor: new THREE.Color(0x4da6ff),
-    viewVector: new THREE.Vector3(0, 0, 5),
-    intensity: 1.2,
-    power: 3.5,
-  },
-  /* vertex */
-  `
-    uniform vec3 viewVector;
-    varying float vIntensity;
-    void main() {
-      vec3 vNormal = normalize(normalMatrix * normal);
-      vec3 vNormel = normalize(normalMatrix * viewVector);
-      vIntensity = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 3.5);
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  /* fragment */
-  `
-    uniform vec3 glowColor;
-    uniform float intensity;
-    varying float vIntensity;
-    void main() {
-      vec3 glow = glowColor * intensity;
-      gl_FragColor = vec4(glow, vIntensity * 0.65);
-    }
-  `
-);
-
-extend({ AtmosphereMaterial });
-
-declare module "@react-three/fiber" {
-  interface ThreeElements {
-    atmosphereMaterial: React.JSX.IntrinsicElements["shaderMaterial"] & {
-      glowColor?: THREE.Color;
-      viewVector?: THREE.Vector3;
-      intensity?: number;
-      power?: number;
-    };
-  }
-}
 
 function useEarthTextures(): EarthTextures | null {
   const [textures, setTextures] = useState<EarthTextures | null>(null);
@@ -108,7 +64,6 @@ function Earth({
 }) {
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
-  const atmosRef = useRef<THREE.Mesh>(null);
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
   const specularColor = useMemo(() => new THREE.Color(0x7f97ac), []);
   const normalScale = useMemo(() => new THREE.Vector2(0.78, 0.78), []);
@@ -116,26 +71,12 @@ function Earth({
 
   useFrame((state) => {
     const elapsed = state.clock.elapsedTime;
-
-    if (earthRef.current) {
-      earthRef.current.rotation.y = elapsed * 0.022;
-    }
-    if (cloudsRef.current) {
-      cloudsRef.current.rotation.y = elapsed * 0.031;
-    }
-
-    if (atmosRef.current) {
-      const mat = atmosRef.current.material as THREE.ShaderMaterial & {
-        uniforms: { viewVector: { value: THREE.Vector3 } };
-      };
-      if (mat.uniforms?.viewVector) {
-        mat.uniforms.viewVector.value.copy(state.camera.position);
-      }
-    }
+    if (earthRef.current) earthRef.current.rotation.y = elapsed * 0.022;
+    if (cloudsRef.current) cloudsRef.current.rotation.y = elapsed * 0.031;
   });
 
   return (
-    <group position={[0.12, -2.7, -1.42]} rotation={[0.12, -0.36, -0.16]} scale={3.2}>
+    <group position={[0, -0.15, 0]} rotation={[0.12, -0.36, -0.16]} scale={2.05}>
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -155,20 +96,8 @@ function Earth({
         <meshPhongMaterial
           map={cloudsMap}
           transparent
-          opacity={0.2}
+          opacity={0.18}
           depthWrite={false}
-        />
-      </mesh>
-
-      <mesh ref={atmosRef} scale={1.035}>
-        <sphereGeometry args={[1, 64, 64]} />
-        <atmosphereMaterial
-          transparent
-          side={THREE.FrontSide}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          glowColor={new THREE.Color(0xc8d9e8)}
-          intensity={1.08}
         />
       </mesh>
     </group>
