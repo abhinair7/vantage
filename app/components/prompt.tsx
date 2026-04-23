@@ -144,42 +144,6 @@ function HeroFull({
 
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">
-          <div className="hero-signal-cloud" aria-hidden>
-            <article className="hero-signal-card hero-signal-card-1">
-              <span className="hero-signal-meta">SATELLITE READ</span>
-              <div className="hero-signal-visual hero-signal-visual--terrain">
-                <span />
-                <span />
-                <span />
-              </div>
-              <h3>See change before it hits the briefing room</h3>
-              <p>Surface growth, berth use, storage fill, and operating pressure in one frame.</p>
-            </article>
-
-            <article className="hero-signal-card hero-signal-card-2">
-              <span className="hero-signal-meta">ENTITY GRAPH</span>
-              <div className="hero-signal-visual hero-signal-visual--graph">
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <h3>Connect the site to the operator story</h3>
-              <p>Place context, ownership clues, and operating relevance stitched into one brief.</p>
-            </article>
-
-            <article className="hero-signal-card hero-signal-card-3">
-              <span className="hero-signal-meta">WATCHLIST VIEW</span>
-              <div className="hero-signal-visual hero-signal-visual--brief">
-                <span />
-                <span />
-                <span />
-              </div>
-              <h3>Turn open sources into a real decision surface</h3>
-              <p>Built for diligence, monitoring, and strategic or operational triage.</p>
-            </article>
-          </div>
-
           <div className="hero-copy hero-copy--centered">
             <div className="hero-kicker-row">
               <span className="hero-kicker">SITE DILIGENCE</span>
@@ -198,21 +162,6 @@ function HeroFull({
                 Vantage turns open geospatial and public-entity data into a business
                 brief for diligence, monitoring, and strategic or operational decisions.
               </p>
-            </div>
-
-            <div className="hero-use-grid" aria-label="Primary Vantage use cases">
-              <article className="hero-use-card">
-                <span>Validate a facility or site</span>
-                <p>Confirm that a location is real, specific, and relevant before deeper diligence.</p>
-              </article>
-              <article className="hero-use-card">
-                <span>Track operational change</span>
-                <p>Use satellite-first context to frame what deserves recurring collection.</p>
-              </article>
-              <article className="hero-use-card">
-                <span>Brief a decision-maker fast</span>
-                <p>Convert raw public context into a concise call, limits, and next move.</p>
-              </article>
             </div>
           </div>
 

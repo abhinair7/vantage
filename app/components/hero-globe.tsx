@@ -2,7 +2,6 @@
 
 import { Canvas, useFrame, extend } from "@react-three/fiber";
 import { Stars, shaderMaterial } from "@react-three/drei";
-import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useMemo, useRef, useEffect, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
@@ -59,7 +58,6 @@ const AtmosphereMaterial = shaderMaterial(
 
 extend({ AtmosphereMaterial });
 
-// Type augmentation for R3F custom element
 declare module "@react-three/fiber" {
   interface ThreeElements {
     atmosphereMaterial: React.JSX.IntrinsicElements["shaderMaterial"] & {
@@ -121,19 +119,17 @@ function Earth({
   const cloudsRef = useRef<THREE.Mesh>(null);
   const groupRef = useRef<THREE.Group>(null);
   const atmosRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Group>(null);
   const mountAt = useRef<number | null>(null);
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
-  const specularColor = useMemo(() => new THREE.Color(0x73d9ff), []);
-  const normalScale = useMemo(() => new THREE.Vector2(0.95, 0.95), []);
-  const emissiveColor = useMemo(() => new THREE.Color(0x0c3d7d), []);
+  const specularColor = useMemo(() => new THREE.Color(0x336699), []);
+  const normalScale = useMemo(() => new THREE.Vector2(0.85, 0.85), []);
+  const emissiveColor = useMemo(() => new THREE.Color(0x061a42), []);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (mountAt.current == null) mountAt.current = t;
     const elapsed = t - mountAt.current;
 
-    // Slow rotation
     if (earthRef.current) {
       earthRef.current.rotation.y = elapsed * 0.045;
     }
@@ -145,12 +141,7 @@ function Earth({
       groupRef.current.rotation.x = -pointer.current.y * 0.06;
       groupRef.current.rotation.z = pointer.current.x * 0.035;
     }
-    if (ringRef.current) {
-      ringRef.current.rotation.z = elapsed * 0.08;
-      ringRef.current.rotation.x = 0.9 + pointer.current.y * 0.04;
-    }
 
-    // Update atmosphere view vector for Fresnel
     if (atmosRef.current) {
       const mat = atmosRef.current.material as THREE.ShaderMaterial & {
         uniforms: { viewVector: { value: THREE.Vector3 } };
@@ -160,9 +151,8 @@ function Earth({
       }
     }
 
-    // Cinematic dolly — 3s ease-in from far to close
     const introT = Math.min(1, elapsed / 3.0);
-    const introEase = 1 - Math.pow(1 - introT, 4); // quartic ease-out
+    const introEase = 1 - Math.pow(1 - introT, 4);
     const dollyFrom = 16;
     const dollyTo = 4.2;
     const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.6;
@@ -182,7 +172,6 @@ function Earth({
 
   return (
     <group ref={groupRef}>
-      {/* Earth surface */}
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -190,48 +179,23 @@ function Earth({
           normalMap={normalMap}
           specularMap={specularMap}
           specular={specularColor}
-          shininess={38}
+          shininess={22}
           normalScale={normalScale}
           emissive={emissiveColor}
-          emissiveIntensity={0.34}
+          emissiveIntensity={0.18}
         />
       </mesh>
 
-      {/* Cloud layer */}
       <mesh ref={cloudsRef} scale={1.006}>
         <sphereGeometry args={[1, 96, 96]} />
         <meshPhongMaterial
           map={cloudsMap}
           transparent
-          opacity={0.28}
+          opacity={0.22}
           depthWrite={false}
         />
       </mesh>
 
-      <group ref={ringRef}>
-        <mesh rotation={[1.05, 0.3, 0.18]} scale={1.38}>
-          <torusGeometry args={[1.14, 0.008, 18, 180]} />
-          <meshBasicMaterial
-            color="#7df9ff"
-            transparent
-            opacity={0.28}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-        <mesh rotation={[1.1, 0.28, 0.2]} scale={1.48}>
-          <torusGeometry args={[1.08, 0.004, 16, 180]} />
-          <meshBasicMaterial
-            color="#fde047"
-            transparent
-            opacity={0.2}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-      </group>
-
-      {/* Fresnel atmospheric scattering — thin blue glow on the limb */}
       <mesh ref={atmosRef} scale={1.035}>
         <sphereGeometry args={[1, 64, 64]} />
         <atmosphereMaterial
@@ -239,20 +203,8 @@ function Earth({
           side={THREE.FrontSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
-          glowColor={new THREE.Color(0x7df9ff)}
-          intensity={1.45}
-        />
-      </mesh>
-
-      <mesh scale={1.16}>
-        <sphereGeometry args={[1, 64, 64]} />
-        <meshBasicMaterial
-          color="#7df9ff"
-          transparent
-          opacity={0.08}
-          side={THREE.BackSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
+          glowColor={new THREE.Color(0x4da6ff)}
+          intensity={1.1}
         />
       </mesh>
     </group>
@@ -306,45 +258,28 @@ export function HeroGlobe() {
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        {/* Three-point lighting — warm key, cool fill, blue rim */}
-        <ambientLight intensity={0.72} />
+        <ambientLight intensity={0.55} />
         <hemisphereLight
-          intensity={0.86}
-          color="#fef5cf"
-          groundColor="#081426"
+          intensity={0.7}
+          color="#dde8f5"
+          groundColor="#080e1a"
         />
-        {/* Key light — warm white, strong, camera-right */}
-        <directionalLight position={[5, 3, 4]} intensity={3.1} color="#fff8de" />
-        {/* Fill — cool, softer, camera-left */}
-        <directionalLight position={[-4, 1, 3]} intensity={1.25} color="#c8ebff" />
-        {/* Rim — blue backlight for edge definition */}
-        <directionalLight position={[-3, -1, -4]} intensity={0.85} color="#2f63d8" />
-        {/* Specular catch light */}
-        <pointLight position={[2, 1.5, 3]} intensity={1.35} color="#e9fbff" />
-        <pointLight position={[-2.8, 1.8, 2.2]} intensity={0.55} color="#fde047" />
+        <directionalLight position={[5, 3, 4]} intensity={2.4} color="#fff5e6" />
+        <directionalLight position={[-4, 1, 3]} intensity={0.8} color="#c4d9f2" />
+        <directionalLight position={[-3, -1, -4]} intensity={0.5} color="#2a5aad" />
+        <pointLight position={[2, 1.5, 3]} intensity={0.9} color="#e0eeff" />
 
         <Stars
           radius={120}
           depth={70}
-          count={4200}
-          factor={2.8}
+          count={3500}
+          factor={2.4}
           saturation={0}
           fade
-          speed={reducedMotion ? 0 : 0.22}
+          speed={reducedMotion ? 0 : 0.18}
         />
 
         {textures && <Earth progress={progress} pointer={pointer} textures={textures} />}
-
-        {!reducedMotion && (
-          <EffectComposer multisampling={0}>
-            <Bloom
-              intensity={0.75}
-              luminanceThreshold={0.18}
-              luminanceSmoothing={0.4}
-              mipmapBlur
-            />
-          </EffectComposer>
-        )}
       </Canvas>
     </div>
   );
