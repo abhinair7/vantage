@@ -50,7 +50,7 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const requestRef = useRef(0);
 
-  const handleAsk = useCallback((query: string) => {
+  const handleAsk = useCallback((query: string, force = false) => {
     const pending = estimateRunProfile(query);
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
@@ -70,7 +70,7 @@ export default function Home() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, force }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Analyze failed with ${response.status}`);
@@ -157,7 +157,11 @@ export default function Home() {
       {phase.kind === "done" && (
         <>
           <Prompt compact onSubmit={handleAsk} initialValue={phase.query} />
-          <Result result={phase.result} onReset={handleReset} />
+          <Result
+            result={phase.result}
+            onReset={handleReset}
+            onForceRun={() => handleAsk(phase.query, true)}
+          />
         </>
       )}
 

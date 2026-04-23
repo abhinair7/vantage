@@ -59,6 +59,18 @@ export type DemoResult = {
   tookMs: number;          // simulated processing time
   methodology: string[];   // bullets shown under "how this was computed"
   kind: "answer" | "insufficient";
+  /**
+   * Set when the analysis was produced in "override" mode — the customer
+   * asked for a best-effort read after the Gatekeeper short-circuited.
+   * Rendered as a visible disclaimer so it's never silently treated as
+   * decision-grade.
+   */
+  notice?: string;
+  /**
+   * True when the analysis ran under the evidence-floor override.
+   * The Result UI hides its "show analysis anyway" button when this is set.
+   */
+  overrideApplied?: boolean;
 };
 
 export type AnalysisRunProfile = {

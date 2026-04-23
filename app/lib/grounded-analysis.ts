@@ -272,17 +272,33 @@ type ContextSnapshot = {
   descriptor: string;
 };
 
-export async function analyzeQuery(query: string): Promise<DemoResult> {
+export type AnalyzeOptions = {
+  /**
+   * Skip the Gatekeeper's confidence-floor / source-diversity short-circuit.
+   * Set when the customer clicked "show analysis anyway" — a best-effort
+   * narrative is produced instead of a withheld brief, and the result is
+   * stamped with a visible disclaimer.
+   */
+  force?: boolean;
+};
+
+export async function analyzeQuery(
+  query: string,
+  opts: AnalyzeOptions = {},
+): Promise<DemoResult> {
   const preset = matchPresetQuery(query);
   if (preset) return preset;
 
-  const grounded = await buildGroundedAnalysis(query);
+  const grounded = await buildGroundedAnalysis(query, opts.force === true);
   if (grounded) return grounded;
 
   return buildNoMatchResult(query);
 }
 
-async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> {
+async function buildGroundedAnalysis(
+  query: string,
+  force: boolean,
+): Promise<DemoResult | null> {
   const mode = detectMode(query);
   const subject = detectSubject(query);
   const measurementIntent = detectMeasurementIntent(query);
@@ -314,7 +330,8 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
     Boolean(wikidata?.owners.length) ||
     Boolean(wiki);
 
-  if (!hasSubstantiveContext || confidence < CONFIDENCE_FLOOR) {
+  const belowFloor = !hasSubstantiveContext || confidence < CONFIDENCE_FLOOR;
+  if (belowFloor && !force) {
     return buildWithheldResult(
       query,
       mode,
@@ -326,6 +343,7 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
       news,
     );
   }
+  const overrideApplied = belowFloor && force;
 
   const evidence: Evidence[] = [];
   const addEvidence = (
@@ -429,14 +447,32 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
     },
   ];
 
+  const baseMethodology = buildMethodology(
+    subject,
+    place,
+    Boolean(wikidata),
+    Boolean(wiki),
+    Boolean(news),
+  );
+  const methodology = overrideApplied
+    ? [
+        "Evidence-floor override applied at the customer's request — the Gatekeeper would normally have withheld this brief.",
+        ...baseMethodology,
+        `Auto-computed confidence landed at ${Math.round(confidence * 100)}%, below the 58% floor Vantage uses for decision-grade output.`,
+      ]
+    : baseMethodology;
+  const reportedConfidence = overrideApplied
+    ? Number(Math.min(confidence, CONFIDENCE_FLOOR - 0.01).toFixed(2))
+    : confidence;
+
   return {
-    id: `grounded_${hash(query).toString(16)}`,
+    id: `grounded_${hash(query).toString(16)}${overrideApplied ? "_override" : ""}`,
     query,
     headline: buildHeadline(mode, subject, place, context, confidence, Boolean(wikidata), news, barePlaceLookup),
     narrative,
     evidence,
     aoi: buildAoi(place, topFeatures, refs),
-    confidence,
+    confidence: reportedConfidence,
     mode,
     tookMs:
       2500 +
@@ -444,8 +480,12 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
       (wikidata ? 260 : 0) +
       (wiki ? 200 : 0) +
       (news ? 280 : 0),
-    methodology: buildMethodology(subject, place, Boolean(wikidata), Boolean(wiki), Boolean(news)),
+    methodology,
     kind: "answer",
+    notice: overrideApplied
+      ? "Best-effort read — the Gatekeeper would have withheld this brief because the evidence floor was not cleared. Do not use as decision-grade without a second pass."
+      : undefined,
+    overrideApplied: overrideApplied || undefined,
   };
 }
 

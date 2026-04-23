@@ -16,6 +16,12 @@ const reveal = (delay = 0) => ({
 type Props = {
   result: DemoResult;
   onReset: () => void;
+  /**
+   * Re-run the same query under the evidence-floor override.
+   * Called when the customer clicks "show analysis anyway" on an
+   * insufficient brief that still resolved a place.
+   */
+  onForceRun?: () => void;
 };
 
 type BriefCard = {
@@ -28,8 +34,12 @@ type NarrativeSection = NarrativeChunk & {
   title: string;
 };
 
-export function Result({ result, onReset }: Props) {
+export function Result({ result, onReset, onForceRun }: Props) {
   const isInsufficient = result.kind === "insufficient";
+  // Offer the override only when the place resolved cleanly (aoi exists)
+  // and the Gatekeeper short-circuited before the full narrative ran.
+  const canForceRun =
+    isInsufficient && Boolean(result.aoi) && !result.overrideApplied && typeof onForceRun === "function";
   const mapRef = useRef<MapHandle | null>(null);
   const sourcesRef = useRef<HTMLDetailsElement | null>(null);
   const [hoveredRef, setHoveredRef] = useState<string | null>(null);
@@ -81,26 +91,87 @@ export function Result({ result, onReset }: Props) {
         margin: "0 auto",
       }}
     >
-      <motion.button
-        type="button"
-        onClick={onReset}
-        className="result-back"
-        initial={{ opacity: 0, x: -8 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.4, ease: EASE }}
-        aria-label="Back to search"
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+        }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M15 19l-7-7 7-7"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>Back</span>
-      </motion.button>
+        <motion.button
+          type="button"
+          onClick={onReset}
+          className="result-back"
+          initial={{ opacity: 0, x: -8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, ease: EASE }}
+          aria-label="Back to search"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M15 19l-7-7 7-7"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>Back</span>
+        </motion.button>
+
+        {canForceRun && (
+          <motion.button
+            type="button"
+            onClick={onForceRun}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, ease: EASE }}
+            title="Run the pipeline past the Gatekeeper's evidence floor and show a best-effort brief."
+            style={{
+              border: "1px solid var(--line)",
+              background: "transparent",
+              color: "var(--warn, #b45309)",
+              padding: "0.5rem 0.85rem",
+              borderRadius: 999,
+              font: "inherit",
+              fontSize: 12,
+              letterSpacing: "0.02em",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            <span aria-hidden>⚠︎</span>
+            <span>Show analysis anyway</span>
+          </motion.button>
+        )}
+      </div>
+
+      {result.notice && (
+        <motion.div
+          {...reveal(0.02)}
+          role="note"
+          className="card-tight"
+          style={{
+            borderColor: "var(--warn, #b45309)",
+            background: "rgba(180, 83, 9, 0.06)",
+            color: "var(--fg-1)",
+            fontSize: 13,
+            lineHeight: 1.45,
+            display: "flex",
+            gap: "0.6rem",
+            alignItems: "flex-start",
+          }}
+        >
+          <span aria-hidden style={{ color: "var(--warn, #b45309)", fontSize: 16, lineHeight: 1 }}>
+            ⚠︎
+          </span>
+          <span>{result.notice}</span>
+        </motion.div>
+      )}
 
       <motion.div {...reveal(0.04)} className="card-tight result-decision-band">
         <div className="result-decision-copy">
