@@ -54,6 +54,23 @@ const COMMON_LOCATION_SUFFIXES = [
   "port",
   "site",
 ];
+const SPECIFIC_FACILITY_TERMS = [
+  "bus stand",
+  "bus station",
+  "bus terminal",
+  "station",
+  "terminal",
+  "depot",
+  "free zone",
+  "freezone",
+  "industrial park",
+  "logistics park",
+  "campus",
+  "hospital",
+  "university",
+  "mall",
+  "stadium",
+];
 
 type NominatimPlace = {
   lat: string;
@@ -623,13 +640,20 @@ function scorePlaceCandidate(
 
   let score = candidate.importance ?? 0;
 
-  if (name && lowerQuery.includes(name)) score += 1.4;
+  if (name && lowerQuery.includes(name)) {
+    const wordCount = name.split(/\s+/).filter(Boolean).length;
+    score += 0.55 + Math.min(1.05, wordCount * 0.3);
+  }
   if (placeMatchesSubject(className, typeName, subject, text)) score += 1.8;
   if (isSpecificSiteCandidate(className, typeName)) score += 0.35;
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
   if (className === "place" && (typeName === "city" || typeName === "town" || typeName === "village")) score += 0.7;
-  if (isBroadCandidate(candidate)) score -= 0.4;
+  const broadCandidate = isBroadCandidate(candidate);
+  if (broadCandidate) score -= 0.4;
   else score += 0.1;
+  if (subject === "facility" && broadCandidate && queryContainsSpecificFacilityTerm(lowerQuery)) {
+    score -= 1.1;
+  }
 
   if (looksLikeStreetLevelCandidate(identityText, className, typeName)) score -= 2.6;
   if (
@@ -730,6 +754,10 @@ function isBroadCandidate(candidate: NominatimPlace): boolean {
 
   const [south, north, west, east] = bbox;
   return Math.max(Math.abs(north - south), Math.abs(east - west)) > 0.28;
+}
+
+function queryContainsSpecificFacilityTerm(query: string): boolean {
+  return SPECIFIC_FACILITY_TERMS.some((term) => query.includes(term));
 }
 
 function subjectQueryTerms(subject: Subject): string[] {
