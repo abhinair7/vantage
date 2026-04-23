@@ -145,8 +145,8 @@ export default function Home() {
           unmounts once we transition to the answer (done). */}
       {phase.kind !== "done" && <HeroGlobe />}
 
-      {/* Telescope HUD — aperture, reticle, corner brackets, live
-          instrument readouts. Rides on top of the globe but below any
+      {/* Orbital foreground layer — vignette, glints, and near-camera
+          debris hints. Rides on top of the globe but below any
           foreground UI. Only shown while the hero is in view. */}
       {phase.kind !== "done" && <TelescopeReticle />}
 

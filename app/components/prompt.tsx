@@ -141,36 +141,23 @@ function HeroFull({
   return (
     <section className="hero">
       <div className="hero-scrim" aria-hidden />
+      <div className="hero-header">
+        <p className="hero-wordmark-kicker">
+          Orbital intelligence for diligence, monitoring, and planning
+        </p>
+        <div className="hero-wordmark">VANTAGE</div>
+      </div>
 
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">
           <div className="hero-copy hero-copy--centered">
-            <div className="hero-flight-line" aria-hidden>
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="hero-caption">
-              <h1 className="display-serif hero-headline hero-headline--premium">
-                Assess a site,
-                <br />
-                corridor, or region.
-              </h1>
-              <p className="hero-sub hero-sub--premium">
-                Vantage assembles open geospatial and public-record evidence into a
-                grounded decision brief for diligence, monitoring, and operational
-                planning.
-              </p>
-            </div>
+            <p className="hero-sub hero-sub--premium">
+              Grounded open geospatial and public-record evidence for any site,
+              corridor, or region.
+            </p>
           </div>
 
           <div className="hero-panel">
-            <div className="hero-panel-rail" aria-hidden>
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
