@@ -22,6 +22,9 @@ const USER_AGENT = "Vantage/0.1 (+https://vantage-blond-nu.vercel.app)";
 const REQUEST_TIMEOUT_MS = 6500;
 const CONFIDENCE_FLOOR = 0.58;
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
+const GOOGLE_NEWS_RSS = "https://news.google.com/rss/search";
+const GDELT_DOC_API = "https://api.gdeltproject.org/api/v2/doc/doc";
+const RECENT_NEWS_WINDOW_HOURS = 168;
 const BARE_LOOKUP_DISQUALIFIERS =
   /\b(?:worth|monitor|monitoring|track|tracking|verify|verification|confirm|check|checking|status|signal|signals|trend|trends|risk|disruption|throughput|traffic|activity|volume|utilization|utilisation|construction|growth|footprint|area|size|acreage|extent|sqm|sq\.?\s?m|m2|m²|square|hectare|hectares|ha|acre|acres|owner|owners|operator|operators|company|evidence|brief|decision|useful|important|real|exists|exist|legit|legitimate|safe|unsafe|now|today|since|over|under|during|last|past|next|total|current|latest|increased|decreased|change|changed|what|where|when|why|how|who)\b/i;
 const COMMON_LOCATION_SUFFIXES = [
@@ -231,11 +234,34 @@ type WikidataProfile = {
   industries: string[];
 };
 
+type NewsArticle = {
+  title: string;
+  url: string;
+  source: string;
+  sourceUrl?: string;
+  publishedAt: string;
+  publishedTs: number;
+  ageHours: number;
+  relevance: number;
+  placeMatched: boolean;
+  topicMatched: boolean;
+  queryScope: "place" | "admin" | "fallback" | "gdelt";
+};
+
+type NewsSnapshot = {
+  articles: NewsArticle[];
+  descriptor: string;
+  dominantTheme: string;
+  sourceNames: string[];
+  freshestHours: number | null;
+};
+
 type EvidenceRefs = {
   place: string;
   context?: string;
   entity?: string;
   background?: string;
+  news?: string[];
 };
 
 type ContextSnapshot = {
@@ -262,24 +288,27 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
   const measurementIntent = detectMeasurementIntent(query);
   const place = await resolvePlace(query, subject, measurementIntent === "footprint");
   if (!place) return null;
+  const barePlaceLookup = isBarePlaceLookupQuery(query, mode, measurementIntent);
 
   if (measurementIntent === "footprint") {
     const footprintResult = buildFootprintResult(query, mode, place);
     if (footprintResult) return footprintResult;
   }
 
-  const [features, wikidata] = await Promise.all([
+  const [features, wikidata, news] = await Promise.all([
     fetchNearbyContext(place, subject),
     fetchWikidataProfile(place.wikidataId),
+    fetchRegionalNews(query, place, subject),
   ]);
 
   const wiki = await fetchWikipediaBrief(place.wikipediaTag ?? wikidata?.wikipediaTag);
   const topFeatures = features.slice(0, 5);
   const context = summarizeContext(topFeatures);
-  const confidence = scoreConfidence(place, topFeatures, wikidata, wiki);
+  const confidence = scoreConfidence(place, topFeatures, wikidata, wiki, news);
 
   const hasSubstantiveContext =
     topFeatures.length > 0 ||
+    Boolean(news?.articles.length) ||
     Boolean(wikidata?.instanceOf.length) ||
     Boolean(wikidata?.operators.length) ||
     Boolean(wikidata?.owners.length) ||
@@ -294,6 +323,7 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
       confidence,
       topFeatures.length,
       measurementIntent,
+      news,
     );
   }
 
@@ -354,43 +384,67 @@ async function buildGroundedAnalysis(query: string): Promise<DemoResult | null> 
       })
     : undefined;
 
+  const newsEvidenceIds =
+    news?.articles.slice(0, 2).map((article, index) =>
+      addEvidence({
+        kind: "event",
+        claim: `Recent local reporting flagged: ${article.title}`,
+        source: `Google News / GDELT · ${article.source} · ${formatPublishedDate(article.publishedAt)}`,
+        sourceUrl: article.url,
+        hashSeed: `news:${query}:${article.url}:${index}`,
+      }),
+    ) ?? [];
+
   const refs: EvidenceRefs = {
     place: placeEvidenceId,
     context: contextEvidenceId,
     entity: entityEvidenceId,
     background: backgroundEvidenceId,
+    news: newsEvidenceIds,
   };
 
   const narrative = [
     {
-      text: buildOperatingPictureLine(place, subject, context, wikidata, wiki),
-      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background]),
+      text: buildOperatingPictureLine(place, subject, context, wikidata, wiki, news),
+      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background, ...(refs.news ?? [])]),
     },
     {
-      text: buildBusinessLine(mode, subject, place, context, wikidata),
-      refs: compactRefs([refs.context, refs.entity, refs.place]),
+      text: buildBusinessLine(mode, subject, place, context, wikidata, news, barePlaceLookup),
+      refs: compactRefs([refs.context, refs.entity, refs.place, ...(refs.news ?? [])]),
     },
     {
-      text: buildConfidenceLine(mode, confidence, topFeatures.length, Boolean(wikidata), Boolean(wiki)),
-      refs: compactRefs([refs.place, refs.context, refs.entity]),
+      text: buildConfidenceLine(
+        mode,
+        confidence,
+        topFeatures.length,
+        Boolean(wikidata),
+        Boolean(wiki),
+        news,
+      ),
+      refs: compactRefs([refs.place, refs.context, refs.entity, ...(refs.news ?? [])]),
     },
     {
-      text: buildNextStepLine(mode, subject, topFeatures.length > 0, Boolean(wikidata)),
-      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background]),
+      text: buildNextStepLine(mode, subject, topFeatures.length > 0, Boolean(wikidata), Boolean(news)),
+      refs: compactRefs([refs.place, refs.context, refs.entity, refs.background, ...(refs.news ?? [])]),
     },
   ];
 
   return {
     id: `grounded_${hash(query).toString(16)}`,
     query,
-    headline: buildHeadline(mode, subject, place, context, confidence, Boolean(wikidata)),
+    headline: buildHeadline(mode, subject, place, context, confidence, Boolean(wikidata), news, barePlaceLookup),
     narrative,
     evidence,
     aoi: buildAoi(place, topFeatures, refs),
     confidence,
     mode,
-    tookMs: 2500 + topFeatures.length * 140 + (wikidata ? 260 : 0) + (wiki ? 200 : 0),
-    methodology: buildMethodology(subject, place, Boolean(wikidata), Boolean(wiki)),
+    tookMs:
+      2500 +
+      topFeatures.length * 140 +
+      (wikidata ? 260 : 0) +
+      (wiki ? 200 : 0) +
+      (news ? 280 : 0),
+    methodology: buildMethodology(subject, place, Boolean(wikidata), Boolean(wiki), Boolean(news)),
     kind: "answer",
   };
 }
@@ -719,6 +773,423 @@ async function fetchWikipediaBrief(tag?: string): Promise<WikiBrief | null> {
   };
 }
 
+async function fetchRegionalNews(
+  query: string,
+  place: ResolvedPlace,
+  subject: Subject,
+): Promise<NewsSnapshot | null> {
+  const topicTerms = buildNewsTopicTerms(query, subject, place);
+  const queries = buildNewsSearchQueries(place, topicTerms);
+  const googleBatches = await Promise.all(
+    queries.map((candidate) => fetchGoogleNewsArticles(candidate.query, candidate.scope)),
+  );
+  const collected = googleBatches.flat();
+
+  if (collected.length < 3) {
+    const gdeltQuery = buildGdeltSearchQuery(place, topicTerms);
+    if (gdeltQuery) {
+      const gdeltArticles = await fetchGdeltArticles(gdeltQuery);
+      collected.push(...gdeltArticles);
+    }
+  }
+
+  const ranked = rankNewsArticles(collected, place, topicTerms, subject).slice(0, 4);
+  if (ranked.length === 0) return null;
+
+  const freshestHours = ranked[0]?.ageHours ?? null;
+  const dominantTheme = inferNewsTheme(ranked, subject);
+  const descriptor = buildNewsDescriptor(place, ranked, dominantTheme);
+
+  return {
+    articles: ranked,
+    descriptor,
+    dominantTheme,
+    sourceNames: Array.from(new Set(ranked.map((article) => article.source))).slice(0, 3),
+    freshestHours,
+  };
+}
+
+function buildNewsTopicTerms(
+  query: string,
+  subject: Subject,
+  place: ResolvedPlace,
+): string[] {
+  const lower = query.toLowerCase();
+  const prioritized =
+    subject === "traffic"
+      ? ["traffic", "congestion", "closure", "transit", "crash"]
+      : subject === "power"
+        ? ["power", "outage", "grid"]
+        : subject === "port" || subject === "vessel"
+          ? ["port", "shipping", "cargo"]
+          : subject === "construction"
+            ? ["construction", "expansion", "project"]
+            : [];
+
+  if (prioritized.length > 0) {
+    return Array.from(
+      new Set(prioritized.filter((term) => lower.includes(term) || prioritized[0] === term)),
+    ).slice(0, 5);
+  }
+
+  const placeTokens = buildPlaceTokenSet(place);
+  return Array.from(
+    new Set(
+      lower
+        .split(/[^a-z0-9]+/)
+        .filter(
+          (token) =>
+            token.length >= 4 &&
+            !placeTokens.has(token) &&
+            !BARE_LOOKUP_DISQUALIFIERS.test(token),
+        ),
+    ),
+  ).slice(0, 3);
+}
+
+function buildNewsSearchQueries(
+  place: ResolvedPlace,
+  topicTerms: string[],
+): Array<{ query: string; scope: NewsArticle["queryScope"] }> {
+  const queries: Array<{ query: string; scope: NewsArticle["queryScope"] }> = [];
+  const seen = new Set<string>();
+  const topicalVariants = topicTerms.length > 0 ? topicTerms.slice(0, 3) : [""];
+  const adminCandidates = Array.from(
+    new Set(
+      [
+        place.address.city,
+        place.address.town,
+        place.address.village,
+        place.address.municipality,
+        place.address.city_district,
+        place.address.county,
+        place.address.state,
+        place.address.suburb,
+      ]
+        .filter(Boolean)
+        .map((value) => value?.trim() ?? "")
+        .filter((value) => value && value.toLowerCase() !== place.name.toLowerCase()),
+    ),
+  );
+
+  const push = (raw: string, scope: NewsArticle["queryScope"]) => {
+    const cleaned = raw.trim();
+    if (!cleaned) return;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    queries.push({ query: cleaned, scope });
+  };
+
+  topicalVariants.forEach((topic) => {
+    push(`"${place.name}"${topic ? ` ${topic}` : ""}`, "place");
+  });
+  adminCandidates.slice(0, 2).forEach((candidate) => {
+    topicalVariants.slice(0, 2).forEach((topic) => {
+      push(`"${candidate}"${topic ? ` ${topic}` : ""}`, "admin");
+    });
+  });
+  push(`"${place.name}"`, "fallback");
+
+  return queries;
+}
+
+async function fetchGoogleNewsArticles(
+  query: string,
+  scope: NewsArticle["queryScope"],
+): Promise<NewsArticle[]> {
+  const params = new URLSearchParams({
+    q: query,
+    hl: "en-US",
+    gl: "US",
+    ceid: "US:en",
+  });
+
+  const xml = await fetchText(`${GOOGLE_NEWS_RSS}?${params.toString()}`);
+  if (!xml) return [];
+
+  return Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/gi))
+    .slice(0, 8)
+    .map((match) => parseGoogleNewsItem(match[1], scope))
+    .filter((article): article is NewsArticle => Boolean(article));
+}
+
+function parseGoogleNewsItem(
+  xml: string,
+  scope: NewsArticle["queryScope"],
+): NewsArticle | null {
+  const title = readXmlTag(xml, "title");
+  const url = readXmlTag(xml, "link");
+  const publishedRaw = readXmlTag(xml, "pubDate");
+  const sourceMatch = xml.match(/<source(?:\s+url="([^"]+)")?>([\s\S]*?)<\/source>/i);
+  const source = decodeXmlEntities(sourceMatch?.[2] ?? "Google News");
+  const sourceUrl = sourceMatch?.[1] ? decodeXmlEntities(sourceMatch[1]) : undefined;
+  const publishedAt = normalizeDateString(publishedRaw);
+  if (!title || !url || !publishedAt) return null;
+
+  return {
+    title: cleanNewsTitle(title),
+    url,
+    source,
+    sourceUrl,
+    publishedAt,
+    publishedTs: new Date(publishedAt).getTime(),
+    ageHours: ageHoursFrom(publishedAt),
+    relevance: 0,
+    placeMatched: false,
+    topicMatched: false,
+    queryScope: scope,
+  };
+}
+
+async function fetchGdeltArticles(query: string): Promise<NewsArticle[]> {
+  const params = new URLSearchParams({
+    query,
+    mode: "ArtList",
+    format: "json",
+    maxrecords: "6",
+    sort: "DateDesc",
+  });
+
+  const response = await fetchJson<{
+    articles?: Array<{
+      url?: string;
+      title?: string;
+      seendate?: string;
+      domain?: string;
+    }>;
+  }>(`${GDELT_DOC_API}?${params.toString()}`);
+
+  return (response?.articles ?? []).flatMap((article) => {
+      const publishedAt = normalizeDateString(article.seendate);
+      if (!article.title || !article.url || !publishedAt) return [];
+
+      return [{
+        title: cleanNewsTitle(article.title),
+        url: article.url,
+        source: article.domain ?? "GDELT",
+        sourceUrl: article.domain ? `https://${article.domain}` : undefined,
+        publishedAt,
+        publishedTs: new Date(publishedAt).getTime(),
+        ageHours: ageHoursFrom(publishedAt),
+        relevance: 0,
+        placeMatched: false,
+        topicMatched: false,
+        queryScope: "gdelt" as const,
+      }];
+    });
+}
+
+function buildGdeltSearchQuery(place: ResolvedPlace, topicTerms: string[]): string | null {
+  const cityLike =
+    place.address.city ||
+    place.address.town ||
+    place.address.village ||
+    place.address.municipality ||
+    place.address.city_district ||
+    place.address.county ||
+    place.address.suburb;
+
+  const location = cityLike && cityLike.toLowerCase() !== place.name.toLowerCase() ? cityLike : place.name;
+  if (!location) return null;
+
+  const topic = topicTerms[0];
+  return topic ? `"${location}" AND ${topic}` : `"${location}"`;
+}
+
+function rankNewsArticles(
+  articles: NewsArticle[],
+  place: ResolvedPlace,
+  topicTerms: string[],
+  subject: Subject,
+): NewsArticle[] {
+  const placeTokens = buildPlaceTokenSet(place);
+  const adminTokens = buildAdminTokenSet(place.address);
+  const requiresTopic = topicTerms.length > 0;
+
+  const deduped = new Map<string, NewsArticle>();
+  for (const article of articles) {
+    const key = article.url.toLowerCase();
+    if (!deduped.has(key)) deduped.set(key, article);
+  }
+
+  return Array.from(deduped.values())
+    .map((article) => {
+      const titleHaystack = article.title.toLowerCase();
+      const titleTokens = significantTokens(titleHaystack);
+      const placeMatched = intersects(placeTokens, titleTokens);
+      const adminMatched = intersects(adminTokens, titleTokens);
+      const topicMatched = topicTerms.some((term) => titleHaystack.includes(term.toLowerCase()));
+
+      let relevance = 0;
+      if (article.queryScope === "place") relevance += 0.55;
+      else if (article.queryScope === "admin") relevance += 0.35;
+      else if (article.queryScope === "gdelt") relevance += 0.22;
+      else relevance += 0.18;
+
+      if (placeMatched) relevance += 0.58;
+      else if (adminMatched) relevance += 0.28;
+
+      if (topicMatched) relevance += 0.78;
+      else if (requiresTopic) relevance -= 0.62;
+
+      if (subject === "traffic") {
+        if (/\bclosure|advisory|lane|congestion|transit|mbta|road\b/.test(titleHaystack)) {
+          relevance += 0.24;
+        }
+        if (/\btraffic stop|suspect|shooting|killed|arrested\b/.test(titleHaystack)) {
+          relevance -= 0.38;
+        }
+      }
+
+      if (article.ageHours <= 24) relevance += 0.42;
+      else if (article.ageHours <= 72) relevance += 0.28;
+      else if (article.ageHours <= RECENT_NEWS_WINDOW_HOURS) relevance += 0.14;
+      else if (article.ageHours > 24 * 45) relevance -= 0.45;
+      if (article.ageHours > 24 * 365) relevance -= 0.9;
+
+      if (/\.(gov|edu)\b/i.test(article.sourceUrl ?? "")) relevance += 0.12;
+
+      return {
+        ...article,
+        relevance: Number(relevance.toFixed(2)),
+        placeMatched,
+        topicMatched,
+      };
+    })
+    .filter((article) => article.relevance >= 0.82)
+    .sort((a, b) => b.relevance - a.relevance || a.ageHours - b.ageHours)
+    .slice(0, 4);
+}
+
+function buildNewsDescriptor(
+  place: ResolvedPlace,
+  articles: NewsArticle[],
+  dominantTheme: string,
+): string {
+  const lead = articles[0];
+  const scope =
+    place.address.city ||
+    place.address.town ||
+    place.address.village ||
+    place.address.suburb ||
+    titleCase(place.name);
+  if (!lead) {
+    return `recent local reporting around ${scope} stayed too thin to characterize`;
+  }
+
+  const recency =
+    lead.ageHours <= 24
+      ? "within the last day"
+      : lead.ageHours <= 72
+        ? "within the last three days"
+        : "within the last week";
+
+  return `${articles.length} recent local articles ${recency} point to ${dominantTheme}, led by ${lead.title}.`;
+}
+
+function inferNewsTheme(articles: NewsArticle[], subject: Subject): string {
+  const combined = articles.map((article) => article.title.toLowerCase()).join(" ");
+
+  if (subject === "traffic") {
+    if (/\bflood|storm|weather\b/.test(combined)) return "weather-linked road disruption";
+    if (/\bcrash|collision|tractor-trailer|fatal\b/.test(combined)) return "incident-driven traffic disruption";
+    if (/\bmarathon|advisory|closure|lane\b/.test(combined)) return "access advisories and road closures";
+    if (/\btransit|mbta|rail\b/.test(combined)) return "transit-led mobility pressure";
+    return "current mobility and access constraints";
+  }
+
+  if (/\bfire|explosion|evacuation\b/.test(combined)) return "public safety disruption";
+  if (/\bpower|outage|blackout\b/.test(combined)) return "energy and utility disruption";
+  if (/\bconstruction|project|expansion\b/.test(combined)) return "active build-out and infrastructure work";
+  return "current local operating conditions";
+}
+
+function buildPlaceTokenSet(place: ResolvedPlace): Set<string> {
+  const tokens = new Set<string>();
+  const add = (value?: string) => {
+    if (!value) return;
+    significantTokens(value).forEach((token) => tokens.add(token));
+  };
+
+  add(place.name);
+  add(place.displayName.split(",")[0]);
+  Object.values(place.address).forEach(add);
+  return tokens;
+}
+
+function buildAdminTokenSet(address: Record<string, string>): Set<string> {
+  const tokens = new Set<string>();
+  [
+    address.suburb,
+    address.city,
+    address.city_district,
+    address.county,
+    address.state,
+    address.country,
+  ]
+    .filter(Boolean)
+    .forEach((value) => {
+      significantTokens(value ?? "").forEach((token) => tokens.add(token));
+    });
+
+  return tokens;
+}
+
+function intersects(a: Set<string>, b: Set<string>): boolean {
+  for (const value of a) {
+    if (b.has(value)) return true;
+  }
+  return false;
+}
+
+function readXmlTag(xml: string, tagName: string): string {
+  const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, "i"));
+  return decodeXmlEntities(match?.[1] ?? "");
+}
+
+function cleanNewsTitle(value: string): string {
+  return decodeXmlEntities(value)
+    .replace(/\s+-\s+Google News$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+function normalizeDateString(value?: string): string | null {
+  if (!value) return null;
+
+  const direct = new Date(value);
+  if (!Number.isNaN(direct.getTime())) {
+    return direct.toISOString();
+  }
+
+  const compact = value.match(
+    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+  );
+  if (!compact) return null;
+
+  const [, year, month, day, hour, minute, second] = compact;
+  return new Date(
+    `${year}-${month}-${day}T${hour}:${minute}:${second}Z`,
+  ).toISOString();
+}
+
+function ageHoursFrom(dateString: string): number {
+  return Math.max(0, (Date.now() - new Date(dateString).getTime()) / (1000 * 60 * 60));
+}
+
 function pickBestPlace(
   candidates: NominatimPlace[],
   query: string,
@@ -783,6 +1254,9 @@ function scorePlaceCandidate(
   );
   const siteFocusedQuery = queryHasSiteFocus(lowerQuery);
   const areaFocusedQuery = queryHasAreaFocus(lowerQuery);
+  const queryTokens = Array.from(significantTokens(lowerQuery));
+  const candidateTokens = significantTokens(text);
+  const tokenOverlap = queryTokens.filter((token) => candidateTokens.has(token)).length;
 
   let score = candidate.importance ?? 0;
 
@@ -790,8 +1264,13 @@ function scorePlaceCandidate(
     const wordCount = name.split(/\s+/).filter(Boolean).length;
     score += 0.55 + Math.min(1.05, wordCount * 0.3);
   }
+  if (tokenOverlap > 0 && queryTokens.length > 0) {
+    const coverage = tokenOverlap / queryTokens.length;
+    score += Math.min(0.62, tokenOverlap * 0.18 + coverage * 0.34);
+  }
   if (placeMatchesSubject(className, typeName, subject, text)) score += 1.8;
   if (isSpecificSiteCandidate(className, typeName)) score += 0.35;
+  if (subject === "traffic" && isSpecificSiteCandidate(className, typeName)) score += 0.28;
   if (explicitSiteMatch) score += stationGlyphMatch ? 3.1 : 1.15;
   if (areaFocusedQuery && areaNameMatch) score += 1.2;
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
@@ -820,6 +1299,20 @@ function scorePlaceCandidate(
   }
 
   return score;
+}
+
+function significantTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(
+        (token) =>
+          token.length >= 3 &&
+          !BARE_LOOKUP_DISQUALIFIERS.test(token) &&
+          !["the", "and", "for", "with", "from", "near", "into"].includes(token),
+      ),
+  );
 }
 
 function queryHasSiteFocus(query: string): boolean {
@@ -920,6 +1413,23 @@ function placeMatchesSubject(
     case "airbase":
     case "aircraft":
       return contains(["airport", "airbase", "airfield", "aerodrome"]) || className === "aeroway";
+    case "traffic":
+      return (
+        contains([
+          "university",
+          "campus",
+          "station",
+          "terminal",
+          "airport",
+          "hospital",
+          "downtown",
+          "junction",
+          "interchange",
+        ]) ||
+        isSpecificSiteCandidate(className, typeName) ||
+        className === "place" ||
+        className === "boundary"
+      );
     default:
       return contains(subjectQueryTerms(subject)) || className === "place" || className === "boundary";
   }
@@ -995,6 +1505,8 @@ function subjectQueryTerms(subject: Subject): string[] {
       return ["refinery", "plant"];
     case "power":
       return ["power", "plant", "substation"];
+    case "traffic":
+      return ["traffic", "transit", "junction", "interchange", "campus", "station"];
     case "airport":
     case "airbase":
     case "aircraft":
@@ -1040,6 +1552,8 @@ function subjectSuffixes(subject: Subject): string[] {
       return ["shipyard", "drydock", "dry dock"];
     case "power":
       return ["power plant", "substation", "switchyard"];
+    case "traffic":
+      return ["campus", "station", "terminal", "downtown", "university"];
     case "datacenter":
       return ["data center", "datacenter", "campus"];
     case "facility":
@@ -1245,13 +1759,25 @@ function buildHeadline(
   context: ContextSnapshot,
   confidence: number,
   hasWikidata: boolean,
+  news: NewsSnapshot | null,
+  barePlaceLookup: boolean,
 ): string {
   const site = titleCase(place.name);
   const confidenceLabel = confidence >= 0.75 ? "high-confidence" : "decision-usable";
   const contextLine =
     context.count > 0
       ? `${context.count} nearby operating signals support the read`
-      : "place resolution is clear but the surrounding context is still thin";
+      : news
+        ? "recent local reporting adds live context even though the mapped surround is thin"
+        : "place resolution is clear but the surrounding context is still thin";
+
+  if (barePlaceLookup && news) {
+    return `Current watchline for ${site}: ${news.dominantTheme} is showing up in recent local reporting, which makes the location usable as a monitoring frame rather than just a geocode.`;
+  }
+
+  if (subject === "traffic" && news) {
+    return `Operational access around ${site} deserves attention: recent local reporting points to ${news.dominantTheme}, and the location now resolves cleanly enough for a live mobility brief.`;
+  }
 
   if (mode === "verify") {
     return `Proceed to diligence: ${site} resolves as a real ${subjectLabel(subject)} location, and the free-source stack produced a ${confidenceLabel} validation read. ${contextLine}.`;
@@ -1270,6 +1796,7 @@ function buildOperatingPictureLine(
   context: ContextSnapshot,
   wikidata: WikidataProfile | null,
   wiki: WikiBrief | null,
+  news: NewsSnapshot | null,
 ): string {
   const site = titleCase(place.name);
   const admin = compactAddress(place.address);
@@ -1282,8 +1809,9 @@ function buildOperatingPictureLine(
     ? ` Public entity metadata describes it as ${buildEntityDescription(wikidata)}.`
     : "";
   const backgroundLine = wiki ? ` Background summaries describe the site or region as ${wiki.extract}.` : "";
+  const newsLine = news ? ` Recent local reporting adds live context: ${news.descriptor}` : "";
 
-  return `${typeLine}${contextLine}${entityLine}${backgroundLine}`;
+  return `${typeLine}${contextLine}${entityLine}${backgroundLine}${newsLine ? ` ${newsLine}` : ""}`;
 }
 
 function buildBusinessLine(
@@ -1292,6 +1820,8 @@ function buildBusinessLine(
   place: ResolvedPlace,
   context: ContextSnapshot,
   wikidata: WikidataProfile | null,
+  news: NewsSnapshot | null,
+  barePlaceLookup: boolean,
 ): string {
   const site = titleCase(place.name);
   const nearestLine =
@@ -1302,25 +1832,36 @@ function buildBusinessLine(
     wikidata && (wikidata.operators.length > 0 || wikidata.owners.length > 0)
       ? ` Public graph data also names ${joinNatural([...wikidata.operators, ...wikidata.owners].slice(0, 2))}, which helps separate a real operating site from a vague place reference.`
       : "";
+  const newsLine = news
+    ? ` Recent local coverage points to ${news.dominantTheme}, which is the live signal that makes the brief useful right now.`
+    : "";
 
   if (mode === "verify") {
-    return `For diligence, the value is simple: this is a concrete operating location, not a registry ghost. ${nearestLine}, which makes the site economically legible before you spend time on counterparties, sanctions, or ownership-chain follow-up.${entityLine}`;
+    return `For diligence, the value is simple: this is a concrete operating location, not a registry ghost. ${nearestLine}, which makes the site economically legible before you spend time on counterparties, sanctions, or ownership-chain follow-up.${entityLine}${newsLine}`;
   }
 
   if (mode === "monitor") {
-    return `For monitoring, this clears the first gate. ${site} is specific enough to revisit on a schedule, and ${nearestLine}, which tells you where pressure, throughput, or change would show up first once recurring imagery or traffic feeds are added.${entityLine}`;
+    return `For monitoring, this clears the first gate. ${site} is specific enough to revisit on a schedule, and ${nearestLine}, which tells you where pressure, throughput, or change would show up first once recurring imagery or traffic feeds are added.${entityLine}${newsLine}`;
+  }
+
+  if (barePlaceLookup && news) {
+    return `For triage, the useful move is not to ask for another generic description of ${site}. The live value is that recent reporting already frames ${news.dominantTheme}, so this location can go straight onto a watchlist or into field-planning decisions.${entityLine}`;
+  }
+
+  if (subject === "traffic") {
+    return `For operations, this is an access-and-timing question rather than a static site lookup. ${news ? `Recent reporting points to ${news.dominantTheme}, which means arrival windows, route planning, and commute assumptions deserve immediate attention.` : `${nearestLine}, which helps show where access pressure would be felt first.`}${entityLine}`;
   }
 
   switch (subject) {
     case "port":
     case "vessel":
-      return `For a commercial read, this looks like a routing and throughput question rather than a simple existence check. ${nearestLine}, which is where freight pressure or dwell-time risk would likely surface first.${entityLine}`;
+      return `For a commercial read, this looks like a routing and throughput question rather than a simple existence check. ${nearestLine}, which is where freight pressure or dwell-time risk would likely surface first.${entityLine}${newsLine}`;
     case "storage":
     case "refinery":
     case "power":
-      return `For a market read, this looks like an asset where surrounding infrastructure matters almost as much as the site itself. ${nearestLine}, which frames how quickly a change here could turn into inventory, dispatch, or basis consequences.${entityLine}`;
+      return `For a market read, this looks like an asset where surrounding infrastructure matters almost as much as the site itself. ${nearestLine}, which frames how quickly a change here could turn into inventory, dispatch, or basis consequences.${entityLine}${newsLine}`;
     default:
-      return `For triage, ${site} is specific enough to prioritize. ${nearestLine}, which helps decide whether this belongs on a diligence queue, an operating watchlist, or the discard pile.${entityLine}`;
+      return `For triage, ${site} is specific enough to prioritize. ${nearestLine}, which helps decide whether this belongs on a diligence queue, an operating watchlist, or the discard pile.${entityLine}${newsLine}`;
   }
 }
 
@@ -1330,11 +1871,13 @@ function buildConfidenceLine(
   featureCount: number,
   hasWikidata: boolean,
   hasWiki: boolean,
+  news: NewsSnapshot | null,
 ): string {
   const confidencePercent = Math.round(confidence * 100);
   const sourceMix = [
     "place resolution",
     featureCount > 0 ? "open-map operating context" : null,
+    news ? "recent regional news" : null,
     hasWikidata ? "entity graph data" : null,
     hasWiki ? "public background text" : null,
   ].filter(Boolean) as string[];
@@ -1342,7 +1885,9 @@ function buildConfidenceLine(
   const limit =
     mode === "monitor"
       ? "What this does not support yet is a hard time-series claim from one pass. Recurring EO, AIS, or ADS-B is still the honest next layer."
-      : "What this does not support yet is a hard claim about recent activity, throughput, or ownership completeness without deeper collection.";
+      : news
+        ? "What this still does not support is a direct satellite-observed object count or a continuous sensor time series. The live signal here is public reporting layered on top of place resolution."
+        : "What this does not support yet is a hard claim about recent activity, throughput, or ownership completeness without deeper collection.";
 
   return `Confidence is ${confidencePercent}%, driven by ${joinNatural(sourceMix)}. That is strong enough for decision support at the triage layer, but not strong enough to pretend the free stack replaces scheduled imagery, registry pulls, or human diligence. ${limit}`;
 }
@@ -1352,10 +1897,13 @@ function buildNextStepLine(
   subject: Subject,
   hasContext: boolean,
   hasWikidata: boolean,
+  hasNews: boolean,
 ): string {
   const collectionLine = hasContext
     ? "Use this brief to choose where the next hour of analyst time should go."
-    : "Use this as a location-validation pass before you invest in deeper collection.";
+    : hasNews
+      ? "Use this as a live location brief rather than a dead-end lookup."
+      : "Use this as a location-validation pass before you invest in deeper collection.";
   const operatorLine = hasWikidata
     ? "The public entity graph is good enough to start ownership and operator checks."
     : "Operator-chain work still needs a separate pass because the public entity graph here is thin.";
@@ -1366,6 +1914,10 @@ function buildNextStepLine(
 
   if (mode === "monitor") {
     return `${collectionLine} Build the watchlist around the map first, then add recurring imagery and movement data. The free read is useful for framing, not for pretending the time series already exists.`;
+  }
+
+  if (subject === "traffic") {
+    return `${collectionLine} Next, add a live traffic or transit feed plus recurring imagery before you make hard calls on throughput, accessibility, or disruption duration.`;
   }
 
   if (subject === "construction" || subject === "port" || subject === "storage") {
@@ -1380,10 +1932,14 @@ function buildMethodology(
   place: ResolvedPlace,
   hasWikidata: boolean,
   hasWiki: boolean,
+  hasNews: boolean,
 ): string[] {
   return [
     `Resolved the place with OpenStreetMap Nominatim and used the returned ${place.className}/${place.typeName} object to frame the AOI.`,
     `Scanned nearby public map features with Overpass and ranked them for a ${subjectLabel(subject)} question by proximity and relevance.`,
+    hasNews
+      ? "Pulled recent regional reporting from Google News RSS and GDELT to add live local context when the place could be tied to current public coverage."
+      : "No current regional news signal cleared the relevance floor, so the brief leaned on place, map, and entity context only.",
     hasWikidata
       ? "Pulled public entity metadata from Wikidata to add instance, operator, owner, and country context where available."
       : "No linked Wikidata entity cleared the bar, so the brief stayed inside place and map context rather than stretching for ownership claims.",
@@ -1402,6 +1958,7 @@ function buildWithheldResult(
   confidence: number,
   featureCount: number,
   measurementIntent: MeasurementIntent | null,
+  news: NewsSnapshot | null,
 ): DemoResult {
   const placeLabel = titleCase(place.name);
   const barePlaceLookup = isBarePlaceLookupQuery(query, mode, measurementIntent);
@@ -1423,19 +1980,25 @@ function buildWithheldResult(
     id: `withheld_${hash(query).toString(16)}`,
     query,
     headline: barePlaceLookup
-      ? `${placeLabel} resolves to a mapped ${place.typeName.replace(/_/g, " ")} in ${admin}, but the prompt does not yet specify what to assess there.`
+      ? news
+        ? `${placeLabel} resolves cleanly, and recent local reporting was found, but the exact decision brief is still too loose to make a confident call.`
+        : `${placeLabel} resolves to a mapped ${place.typeName.replace(/_/g, " ")} in ${admin}, but the prompt does not yet specify what to assess there.`
       : `Place match found for ${placeLabel}, but the evidence floor for a ${subjectLabel(subject)} brief was not met.`,
     narrative: [
       {
         text: barePlaceLookup
-          ? `${placeLabel} resolves cleanly on the map as ${place.className}/${place.typeName} in ${admin}. The public stack can validate the place and anchor it on the map, but this prompt does not yet ask a concrete operational, strategic, or measurement question about it.`
+          ? news
+            ? `${placeLabel} resolves cleanly on the map as ${place.className}/${place.typeName} in ${admin}, and there is current local reporting in the area. The brief still stopped short because the prompt is too open-ended to choose one decision frame without overreaching.`
+            : `${placeLabel} resolves cleanly on the map as ${place.className}/${place.typeName} in ${admin}. The public stack can validate the place and anchor it on the map, but this prompt does not yet ask a concrete operational, strategic, or measurement question about it.`
           : `${placeLabel} resolved cleanly on the map, but the free-source stack did not return enough surrounding context to support a decision brief. The system withheld the call instead of padding the gap with generated certainty.`,
         refs: [placeEvidenceId],
       },
       {
         text: barePlaceLookup
-          ? `Best next step: ask about a specific site, road, facility, footprint, operator, or trend inside ${placeLabel}. That gives Vantage something decision-grade to test instead of only geocoding the locality.`
-          : `Confidence only reached ${Math.round(confidence * 100)}%. The limiting factor was source depth, not prose. ${featureCount > 0 ? `A few nearby signals appeared, but not enough to make the operating picture decision-grade.` : "The surrounding map context stayed too thin to move beyond place validation."}`,
+          ? news
+            ? `Best next step: anchor the place to an operating frame such as traffic, power, construction, safety, or footprint. Right now the system can see live local context, but it still needs the decision lens.`
+            : `Best next step: ask about a specific site, road, facility, footprint, operator, or trend inside ${placeLabel}. That gives Vantage something decision-grade to test instead of only geocoding the locality.`
+          : `Confidence only reached ${Math.round(confidence * 100)}%. The limiting factor was source depth, not prose. ${featureCount > 0 ? `A few nearby signals appeared, but not enough to make the operating picture decision-grade.` : news ? "Some current local reporting was available, but it did not tie tightly enough to the exact site or decision frame." : "The surrounding map context stayed too thin to move beyond place validation."}`,
         refs: barePlaceLookup ? [placeEvidenceId] : [],
       },
     ],
@@ -1446,7 +2009,7 @@ function buildWithheldResult(
     tookMs: 2100,
     methodology: [
       "Resolved the location with OpenStreetMap Nominatim.",
-      "Tried to enrich with open-map context, public entity metadata, and public background sources.",
+      "Tried to enrich with open-map context, recent regional news, public entity metadata, and public background sources.",
       "The evidence mix did not clear the confidence floor, so the brief was withheld.",
       "Best next step: narrow the location, add the operator name, or switch to a collection path with recurring EO or registry data.",
     ],
@@ -1540,6 +2103,17 @@ function buildAoi(place: ResolvedPlace, features: ContextFeature[], refs: Eviden
               zoom: chooseZoom(place.bbox) + 0.2,
             },
           }
+        : {}),
+      ...(refs.news
+        ? Object.fromEntries(
+            refs.news.map((id) => [
+              id,
+              {
+                center: place.center,
+                zoom: chooseZoom(place.bbox) + 0.3,
+              },
+            ]),
+          )
         : {}),
     },
   };
@@ -1694,6 +2268,17 @@ function buildOverpassQuery(radius: number, lat: number, lon: number, subject: S
     );
   }
 
+  if (subject === "traffic") {
+    selectors.push(
+      `way${around}["highway"~"motorway|trunk|primary|secondary"];`,
+      `nwr${around}["highway"="motorway_junction"];`,
+      `nwr${around}["highway"="traffic_signals"];`,
+      `nwr${around}["public_transport"];`,
+      `nwr${around}["amenity"~"bus_station|parking"];`,
+      `nwr${around}["railway"~"station|halt|tram_stop"];`,
+    );
+  }
+
   return `
 [out:json][timeout:22];
 (
@@ -1776,6 +2361,19 @@ function scoreFeature(tags: Record<string, string>, subject: Subject): number {
     case "airbase":
     case "aircraft":
       return Number(Boolean(aeroway || tags.military === "airfield" || tags.aerodrome)) * 12;
+    case "traffic":
+      return Number(
+        Boolean(
+          tags.highway === "motorway_junction" ||
+            tags.highway === "traffic_signals" ||
+            highwayRank(tags.highway) > 0 ||
+            railway === "station" ||
+            railway === "tram_stop" ||
+            tags.public_transport ||
+            tags.amenity === "bus_station" ||
+            tags.amenity === "parking",
+        ),
+      ) * 11;
     case "railway":
       return Number(Boolean(railway)) * 12;
     case "power":
@@ -1809,6 +2407,9 @@ function inferCategory(tags: Record<string, string>, subject: Subject): ContextC
   if (tags.aeroway || tags.military === "airfield") {
     return "aviation";
   }
+  if (highwayRank(tags.highway) > 0 || tags.highway === "traffic_signals" || tags.public_transport) {
+    return "transport";
+  }
   if (tags.railway) {
     return "transport";
   }
@@ -1826,6 +2427,7 @@ function inferCategory(tags: Record<string, string>, subject: Subject): ContextC
 
 function inferDescriptor(tags: Record<string, string>): string {
   if (tags.name) return tags.name;
+  if (tags.highway) return `${tags.highway.replace(/_/g, " ")} corridor`;
   if (tags.industrial) return `${tags.industrial.replace(/_/g, " ")} asset`;
   if (tags.man_made) return `${tags.man_made.replace(/_/g, " ")} asset`;
   if (tags.landuse) return `${tags.landuse.replace(/_/g, " ")} area`;
@@ -1845,6 +2447,21 @@ function inferMarkerKind(tags: Record<string, string>, subject: Subject): Marker
     return "vessel";
   }
   return "beacon";
+}
+
+function highwayRank(highway?: string): number {
+  switch (highway) {
+    case "motorway":
+      return 4;
+    case "trunk":
+      return 3;
+    case "primary":
+      return 2;
+    case "secondary":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 function summarizeContext(features: ContextFeature[]): ContextSnapshot {
@@ -1876,6 +2493,7 @@ function scoreConfidence(
   features: ContextFeature[],
   wikidata: WikidataProfile | null,
   wiki: WikiBrief | null,
+  news: NewsSnapshot | null,
 ): number {
   let score = 0.46;
 
@@ -1890,6 +2508,12 @@ function scoreConfidence(
   if (wikidata) score += 0.08;
   if (wikidata && (wikidata.operators.length > 0 || wikidata.owners.length > 0)) score += 0.04;
   if (wiki) score += 0.03;
+  if (news) score += 0.07;
+  if (news && news.articles.length >= 2) score += 0.04;
+  if (news?.freshestHours !== null && news?.freshestHours !== undefined) {
+    if (news.freshestHours <= 24) score += 0.05;
+    else if (news.freshestHours <= 72) score += 0.03;
+  }
 
   if (place.className === "boundary" || place.typeName === "administrative") score -= 0.06;
   if (features.length === 0) score -= 0.05;
@@ -1973,6 +2597,8 @@ function radiusForSubject(subject: Subject): number {
     case "port":
     case "vessel":
       return 7000;
+    case "traffic":
+      return 2600;
     case "airport":
     case "airbase":
     case "aircraft":
@@ -2052,6 +2678,14 @@ function formatDistance(distanceKm: number): string {
   return `${Math.round(distanceKm)} km`;
 }
 
+function formatPublishedDate(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 function haversineKm(a: [number, number], b: [number, number]): number {
   const toRad = (value: number) => (value * Math.PI) / 180;
   const [lon1, lat1] = a;
@@ -2100,6 +2734,33 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> 
 
     if (!response.ok) return null;
     return (await response.json()) as T;
+  } catch (error) {
+    console.error("[grounded-analysis] request failed", error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchText(url: string, init?: RequestInit): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en",
+        ...(init?.headers ?? {}),
+      },
+      signal: controller.signal,
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) return null;
+    return await response.text();
   } catch (error) {
     console.error("[grounded-analysis] request failed", error);
     return null;

@@ -416,6 +416,8 @@ function deriveBriefCards(result: DemoResult): BriefCard[] {
   const impactTitle =
     subject === "port" || subject === "vessel"
       ? "Supply-chain exposure"
+      : subject === "traffic"
+        ? "Mobility / access risk"
       : subject === "storage" || subject === "refinery" || subject === "power"
         ? "Market-moving asset"
         : "Strategic site relevance";
@@ -472,6 +474,9 @@ function nextMoveCopy(mode: DemoResult["mode"], subject: string): string {
   }
   if (mode === "monitor") {
     return "Keep the satellite map as the operational frame, then add recurring imagery and movement feeds before you claim the trend is real.";
+  }
+  if (subject === "traffic") {
+    return "Use this to adjust access planning, route assumptions, or site timing, then add a live traffic feed before you make hard operational calls.";
   }
   if (subject === "construction" || subject === "port" || subject === "storage") {
     return "The next honest step is time-series collection, not more narrative polish. This already tells you where to point it.";

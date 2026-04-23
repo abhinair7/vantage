@@ -2,6 +2,7 @@ export type Subject =
   | "port"
   | "refinery"
   | "storage"
+  | "traffic"
   | "airport"
   | "airbase"
   | "factory"
@@ -27,6 +28,23 @@ const SUBJECT_KEYWORDS: Record<Subject, string[]> = {
   port: ["port", "harbor", "harbour", "terminal", "quay", "dock", "berth"],
   refinery: ["refinery", "refineries", "petrochemical"],
   storage: ["storage", "tank farm", "silo", "oil hub", "stockpile", "inventory"],
+  traffic: [
+    "traffic",
+    "congestion",
+    "gridlock",
+    "commute",
+    "closure",
+    "lane closure",
+    "traffic advisory",
+    "road",
+    "roads",
+    "highway",
+    "highways",
+    "transit",
+    "transportation",
+    "crash",
+    "collision",
+  ],
   airport: ["airport", "runway", "tarmac", "apron"],
   airbase: ["airbase", "air field", "airfield", "air force base"],
   factory: ["factory", "plant", "manufacturing", "mill"],
@@ -274,6 +292,8 @@ export function subjectLabel(subject: Subject): string {
       return "air base";
     case "datacenter":
       return "data center";
+    case "traffic":
+      return "traffic";
     default:
       return subject;
   }
