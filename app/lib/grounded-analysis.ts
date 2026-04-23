@@ -71,6 +71,41 @@ const SPECIFIC_FACILITY_TERMS = [
   "mall",
   "stadium",
 ];
+const SITE_FOCUSED_QUERY_TERMS = [
+  "airport",
+  "airbase",
+  "airfield",
+  "aerodrome",
+  "bus stand",
+  "bus station",
+  "bus terminal",
+  "campus",
+  "data center",
+  "datacenter",
+  "depot",
+  "factory",
+  "free zone",
+  "freezone",
+  "hospital",
+  "industrial park",
+  "logistics park",
+  "mall",
+  "power plant",
+  "refinery",
+  "shipyard",
+  "stadium",
+  "station",
+  "terminal",
+  "university",
+  "warehouse",
+];
+const AREA_FOCUSED_QUERY_TERMS = [
+  "free zone",
+  "freezone",
+  "industrial park",
+  "logistics park",
+  "campus",
+];
 
 type NominatimPlace = {
   lat: string;
@@ -373,6 +408,18 @@ async function resolvePlace(
     candidates.push(...matches);
   }
 
+  if (queryHasAreaFocus(query.toLowerCase())) {
+    const expansions = buildAddressExpansionQueries(candidates, query);
+    for (const hint of expansions) {
+      const normalized = hint.trim().toLowerCase();
+      if (!normalized || seenQueries.has(normalized)) continue;
+      seenQueries.add(normalized);
+
+      const matches = await fetchNominatimSearch(hint, includeGeometry);
+      candidates.push(...matches);
+    }
+  }
+
   const best = pickBestPlace(candidates, query, subject);
   return best ? normalizePlace(best) : null;
 }
@@ -425,6 +472,32 @@ function buildFallbackPlaceHints(hint: string, subject: Subject): string[] {
   return variants;
 }
 
+function buildAddressExpansionQueries(
+  candidates: NominatimPlace[],
+  query: string,
+): string[] {
+  const lowerQuery = query.toLowerCase();
+  const expansions = new Set<string>();
+
+  for (const candidate of candidates) {
+    for (const value of Object.values(candidate.address ?? {})) {
+      const normalized = value.trim();
+      if (
+        normalized &&
+        candidateNameMatchesQueryAreaFocus(
+          lowerQuery,
+          normalized.toLowerCase(),
+          normalized,
+        )
+      ) {
+        expansions.add(normalized);
+      }
+    }
+  }
+
+  return Array.from(expansions).sort((a, b) => b.length - a.length);
+}
+
 async function fetchNominatimSearch(
   query: string,
   includeGeometry = false,
@@ -432,7 +505,7 @@ async function fetchNominatimSearch(
   const params = new URLSearchParams({
     q: query,
     format: "jsonv2",
-    limit: "5",
+    limit: "8",
     addressdetails: "1",
     extratags: "1",
   });
@@ -614,12 +687,27 @@ function pickBestPlace(
     if (!unique.has(key)) unique.set(key, candidate);
   }
 
-  const ranked = Array.from(unique.values())
+  const scored = Array.from(unique.values())
     .map((candidate) => ({
       candidate,
       score: scorePlaceCandidate(candidate, query, subject),
-    }))
-    .sort((a, b) => b.score - a.score);
+    }));
+
+  const lowerQuery = query.toLowerCase();
+  const strongSpecific = queryHasSiteFocus(lowerQuery)
+    ? scored.filter(({ candidate }) => isStrongSpecificCandidate(candidate, query, subject))
+    : [];
+  const nonSubfeatureSpecific = strongSpecific.filter(
+    ({ candidate }) => !looksLikeSubfeatureCandidate(candidate, lowerQuery),
+  );
+  const pool =
+    nonSubfeatureSpecific.length > 0
+      ? nonSubfeatureSpecific
+      : strongSpecific.length > 0
+        ? strongSpecific
+        : scored;
+
+  const ranked = pool.sort((a, b) => b.score - a.score);
 
   const best = ranked[0];
   if (!best || best.score < 1.2) return null;
@@ -638,6 +726,19 @@ function scorePlaceCandidate(
   const typeName = candidate.type?.toLowerCase() ?? candidate.addresstype?.toLowerCase() ?? "";
   const text = `${name} ${typeName} ${candidate.display_name}`.toLowerCase();
   const identityText = `${name} ${typeName} ${className}`.toLowerCase();
+  const stationGlyphMatch = lowerQuery.includes("station") && /駅/.test(candidate.display_name);
+  const explicitSiteMatch = candidateMatchesQuerySiteFocus(
+    lowerQuery,
+    text,
+    candidate.display_name,
+  );
+  const areaNameMatch = candidateNameMatchesQueryAreaFocus(
+    lowerQuery,
+    name,
+    candidate.display_name,
+  );
+  const siteFocusedQuery = queryHasSiteFocus(lowerQuery);
+  const areaFocusedQuery = queryHasAreaFocus(lowerQuery);
 
   let score = candidate.importance ?? 0;
 
@@ -647,18 +748,27 @@ function scorePlaceCandidate(
   }
   if (placeMatchesSubject(className, typeName, subject, text)) score += 1.8;
   if (isSpecificSiteCandidate(className, typeName)) score += 0.35;
-  if (lowerQuery.includes("station") && /駅/.test(candidate.display_name)) score += 3.1;
+  if (explicitSiteMatch) score += stationGlyphMatch ? 3.1 : 1.15;
+  if (areaFocusedQuery && areaNameMatch) score += 1.2;
   if (className === "boundary" || typeName === "administrative" || typeName === "city") score += 0.5;
   if (className === "place" && (typeName === "city" || typeName === "town" || typeName === "village")) score += 0.7;
   const broadCandidate = isBroadCandidate(candidate);
   if (broadCandidate) score -= 0.4;
   else score += 0.1;
+  if (siteFocusedQuery && broadCandidate) score -= 1.35;
   if (subject === "facility" && broadCandidate && queryContainsSpecificFacilityTerm(lowerQuery)) {
     score -= 1.1;
   }
+  if (siteFocusedQuery && looksLikeSubfeatureCandidate(candidate, lowerQuery)) {
+    score -= 1.05;
+  }
+  if (areaFocusedQuery && !areaNameMatch) {
+    score -= 1.35;
+  }
 
-  if (looksLikeStreetLevelCandidate(identityText, className, typeName)) score -= 2.6;
+  if (!explicitSiteMatch && looksLikeStreetLevelCandidate(identityText, className, typeName)) score -= 2.6;
   if (
+    !explicitSiteMatch &&
     !placeMatchesSubject(className, typeName, subject, text) &&
     looksLikeStreetLevelCandidate(identityText, className, typeName)
   ) {
@@ -666,6 +776,74 @@ function scorePlaceCandidate(
   }
 
   return score;
+}
+
+function queryHasSiteFocus(query: string): boolean {
+  return SITE_FOCUSED_QUERY_TERMS.some((term) => query.includes(term));
+}
+
+function queryHasAreaFocus(query: string): boolean {
+  return AREA_FOCUSED_QUERY_TERMS.some((term) => query.includes(term));
+}
+
+function isStrongSpecificCandidate(
+  candidate: NominatimPlace,
+  query: string,
+  subject: Subject,
+): boolean {
+  const lowerQuery = query.toLowerCase();
+  const name =
+    (candidate.name || candidate.display_name.split(",")[0]?.trim() || "").toLowerCase();
+  const className = (candidate.class ?? candidate.category ?? "").toLowerCase();
+  const typeName = candidate.type?.toLowerCase() ?? candidate.addresstype?.toLowerCase() ?? "";
+  const text = `${name} ${typeName} ${candidate.display_name}`.toLowerCase();
+
+  if (isBroadCandidate(candidate)) return false;
+  if (candidateMatchesQuerySiteFocus(lowerQuery, text, candidate.display_name)) return true;
+  if (isSpecificSiteCandidate(className, typeName)) return true;
+  if (placeMatchesSubject(className, typeName, subject, text)) return true;
+
+  return (
+    queryContainsSpecificFacilityTerm(lowerQuery) &&
+    /airport|airbase|airfield|aerodrome|terminal|depot|free zone|freezone|industrial park|logistics park|campus|hospital|university|stadium|mall|warehouse|factory|shipyard|refinery|power plant|data center|datacenter/.test(
+      text,
+    )
+  );
+}
+
+function looksLikeSubfeatureCandidate(candidate: NominatimPlace, query: string): boolean {
+  const name = candidate.name ?? "";
+  const text = `${name} ${candidate.display_name}`;
+
+  if (!/[;()]/.test(name) && !/\b(exit|entrance|gate|platform|concourse)\b/i.test(text) && !/出入口/.test(text)) {
+    return false;
+  }
+
+  return !/[;()]/.test(query) && !/\b(exit|entrance|gate|platform|concourse)\b/i.test(query) && !/出入口/.test(query);
+}
+
+function candidateMatchesQuerySiteFocus(
+  query: string,
+  text: string,
+  displayName: string,
+): boolean {
+  if (query.includes("station") && /駅/.test(displayName)) return true;
+
+  return SITE_FOCUSED_QUERY_TERMS.some(
+    (term) => query.includes(term) && text.includes(term),
+  );
+}
+
+function candidateNameMatchesQueryAreaFocus(
+  query: string,
+  name: string,
+  displayName: string,
+): boolean {
+  const displayHead = displayName.split(",")[0]?.trim().toLowerCase() ?? displayName.toLowerCase();
+
+  return AREA_FOCUSED_QUERY_TERMS.some(
+    (term) => query.includes(term) && (name.includes(term) || displayHead.includes(term)),
+  );
 }
 
 function placeMatchesSubject(
