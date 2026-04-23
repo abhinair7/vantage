@@ -145,6 +145,11 @@ function HeroFull({
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">
           <div className="hero-copy hero-copy--centered">
+            <div className="hero-flight-line" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </div>
             <div className="hero-caption">
               <h1 className="display-serif hero-headline hero-headline--premium">
                 Assess a site,
@@ -160,6 +165,12 @@ function HeroFull({
           </div>
 
           <div className="hero-panel">
+            <div className="hero-panel-rail" aria-hidden>
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

@@ -7,11 +7,10 @@ import * as THREE from "three";
 import { TextureLoader } from "three";
 
 /**
- * Hero 3D Earth — IMAX cinematic.
+ * Hero 3D Earth — cockpit window view.
  *
- * Clean planet, no gimmicks. Fresnel atmosphere scattering on the limb,
- * high-detail normals, three-point lighting. The camera starts far back
- * (looking through telescope aperture) and dollies in over ~3s.
+ * The planet is intentionally off-axis so the landing page feels like a
+ * spacecraft point-of-view rather than a centered product pedestal.
  */
 
 type ProgressRef = MutableRefObject<number>;
@@ -143,17 +142,17 @@ function Earth({
 
     const introT = Math.min(1, elapsed / 3.0);
     const introEase = 1 - Math.pow(1 - introT, 4);
-    const dollyFrom = 16;
-    const dollyTo = 4.2;
-    const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.6;
+    const dollyFrom = 18.5;
+    const dollyTo = 6.1;
+    const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.2;
     state.camera.position.z = z;
-    state.camera.position.x = 0;
-    state.camera.position.y = 0;
-    state.camera.lookAt(0, 0, 0);
+    state.camera.position.x = -0.28;
+    state.camera.position.y = -0.08;
+    state.camera.lookAt(0.8, 0.2, 0);
   });
 
   return (
-    <group position={[0, -0.04, 0]} rotation={[-0.14, 0, 0.08]}>
+    <group position={[0.92, 0.34, -0.2]} rotation={[-0.1, -0.22, 0.16]}>
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -221,35 +220,36 @@ export function HeroGlobe() {
         zIndex: 0,
         pointerEvents: "none",
         background:
-          "radial-gradient(ellipse at 50% 36%, #142235 0%, #070d16 42%, #010204 100%)",
+          "radial-gradient(circle at 70% 34%, rgba(104, 132, 164, 0.2) 0%, rgba(17, 25, 39, 0.18) 20%, rgba(3, 6, 10, 0) 42%), radial-gradient(ellipse at 50% 28%, #101722 0%, #06090f 48%, #010203 100%)",
       }}
     >
       <Canvas
-        camera={{ position: [0, 0, 16], fov: 36 }}
+        camera={{ position: [-0.28, -0.08, 18.5], fov: 31 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.48} />
+        <ambientLight intensity={0.28} />
         <hemisphereLight
-          intensity={0.6}
-          color="#dce5ef"
-          groundColor="#05080f"
+          intensity={0.42}
+          color="#dae3ee"
+          groundColor="#03070d"
         />
-        <directionalLight position={[5, 3, 4]} intensity={2.2} color="#f4f8fb" />
-        <directionalLight position={[-4, 1, 3]} intensity={0.74} color="#9bafc5" />
-        <directionalLight position={[-3, -1, -4]} intensity={0.34} color="#1b314d" />
-        <pointLight position={[2, 1.5, 3]} intensity={0.72} color="#d9e6f3" />
+        <directionalLight position={[8, 4, 5]} intensity={2.6} color="#f5f6f8" />
+        <directionalLight position={[-5, 1, 2]} intensity={0.5} color="#7f92aa" />
+        <directionalLight position={[-3, -2, -4]} intensity={0.22} color="#15263a" />
+        <pointLight position={[3, 2, 5]} intensity={0.78} color="#dde6ef" />
+        <pointLight position={[-2, -1, 3]} intensity={0.2} color="#7197bf" />
 
         <Stars
           radius={120}
           depth={70}
-          count={3500}
-          factor={2.4}
+          count={4200}
+          factor={2.1}
           saturation={0}
           fade
-          speed={reducedMotion ? 0 : 0.18}
+          speed={reducedMotion ? 0 : 0.12}
         />
 
         {textures && <Earth progress={progress} textures={textures} />}
