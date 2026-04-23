@@ -145,8 +145,8 @@ export default function Home() {
           unmounts once we transition to the answer (done). */}
       {phase.kind !== "done" && <HeroGlobe />}
 
-      {/* Orbital foreground layer — vignette, rift light, and nebula
-          detail. Rides on top of the globe but below any
+      {/* Orbital foreground layer — vignette, lensing glow, and ship
+          silhouette detail. Rides on top of the globe but below any
           foreground UI. Only shown while the hero is in view. */}
       {phase.kind !== "done" && <TelescopeReticle />}
 

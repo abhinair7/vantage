@@ -694,103 +694,178 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 54% 16%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 16%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0) 58%, rgba(2, 4, 6, 0.12) 86%, rgba(2, 4, 6, 0.62) 100%);
+    linear-gradient(180deg, rgba(2, 4, 6, 0.08) 0%, rgba(2, 4, 6, 0.1) 28%, rgba(2, 4, 6, 0.42) 100%),
+    radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0) 60%, rgba(2, 4, 6, 0.16) 88%, rgba(2, 4, 6, 0.7) 100%);
 }
 
-.stellar-rift {
+.lensing-halo {
   position: absolute;
-  top: -14%;
-  right: -8%;
-  width: min(78vw, 980px);
-  height: min(132vh, 1220px);
+  top: -5%;
+  right: -2%;
+  width: min(34vw, 430px);
+  height: min(34vw, 430px);
   border-radius: 50%;
-  transform: rotate(23deg);
   background:
-    radial-gradient(ellipse at 52% 50%, rgba(255, 255, 255, 0) 48%, rgba(250, 251, 255, 0.18) 55%, rgba(137, 222, 242, 0.16) 60%, rgba(193, 211, 226, 0.12) 66%, rgba(255, 255, 255, 0) 74%);
-  filter: blur(8px);
-  opacity: 0.72;
+    radial-gradient(circle at 50% 50%, rgba(255, 245, 224, 0) 34%, rgba(255, 244, 214, 0.68) 45%, rgba(255, 246, 220, 0.96) 54%, rgba(255, 248, 231, 0.22) 66%, rgba(255, 255, 255, 0) 78%);
+  filter: blur(3px);
+  opacity: 0.96;
   mix-blend-mode: screen;
 }
 
-.stellar-rift-core {
+.lensing-core {
+  position: absolute;
+  top: 3.2%;
+  right: 5.2%;
+  width: min(14vw, 178px);
+  height: min(14vw, 178px);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(7, 10, 14, 0.98) 0%, rgba(8, 12, 16, 0.96) 55%, rgba(13, 18, 24, 0.14) 72%, rgba(13, 18, 24, 0) 78%);
+  box-shadow:
+    0 0 48px rgba(255, 245, 210, 0.18),
+    0 0 110px rgba(255, 240, 198, 0.08);
+}
+
+.lensing-flare {
   position: absolute;
   top: -6%;
-  left: 56%;
-  width: min(34vw, 440px);
-  height: min(86vh, 760px);
-  transform: translateX(-50%) rotate(18deg);
+  right: 2%;
+  width: min(54vw, 760px);
+  height: min(58vh, 520px);
   background:
-    linear-gradient(180deg, rgba(120, 227, 245, 0) 0%, rgba(120, 227, 245, 0.08) 16%, rgba(120, 227, 245, 0.26) 42%, rgba(245, 248, 251, 0.18) 52%, rgba(186, 204, 220, 0.14) 70%, rgba(186, 204, 220, 0) 100%);
-  filter: blur(28px);
-  opacity: 0.66;
-}
-
-.stellar-arc {
-  position: absolute;
-  right: -12%;
-  bottom: -8%;
-  width: min(64vw, 860px);
-  height: min(78vh, 840px);
-  border-radius: 50%;
-  transform: rotate(14deg);
-  background:
-    radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0) 58%, rgba(245, 247, 250, 0.14) 63%, rgba(133, 207, 231, 0.08) 67%, rgba(255, 255, 255, 0) 73%);
-  filter: blur(6px);
-  opacity: 0.58;
-}
-
-.stellar-cloud {
-  position: absolute;
-  border-radius: 50%;
+    radial-gradient(ellipse at 58% 22%, rgba(255, 248, 227, 0.94) 0%, rgba(255, 246, 220, 0.32) 18%, rgba(255, 246, 220, 0.08) 32%, rgba(255, 255, 255, 0) 58%);
+  filter: blur(16px);
+  opacity: 0.92;
   mix-blend-mode: screen;
-  filter: blur(62px);
 }
 
-.stellar-cloud--slate {
-  left: -10%;
-  bottom: 4%;
-  width: min(58vw, 760px);
-  height: min(52vh, 460px);
+.lensing-trail {
+  position: absolute;
+  top: 2%;
+  right: -6%;
+  width: min(44vw, 620px);
+  height: min(22vh, 180px);
+  border-radius: 999px;
+  transform: rotate(7deg);
   background:
-    radial-gradient(circle at 48% 50%, rgba(132, 152, 172, 0.24) 0%, rgba(132, 152, 172, 0.12) 34%, rgba(132, 152, 172, 0) 72%);
-  opacity: 0.68;
+    linear-gradient(90deg, rgba(255, 244, 214, 0.46) 0%, rgba(255, 244, 214, 0.18) 26%, rgba(255, 244, 214, 0) 68%);
+  filter: blur(10px);
+  opacity: 0.82;
+  mix-blend-mode: screen;
 }
 
-.stellar-cloud--cyan {
-  top: -8%;
-  left: 34%;
-  width: min(44vw, 560px);
-  height: min(44vh, 360px);
-  background:
-    radial-gradient(circle at 50% 52%, rgba(95, 214, 238, 0.28) 0%, rgba(95, 214, 238, 0.13) 30%, rgba(95, 214, 238, 0) 72%);
-  opacity: 0.76;
+.space-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  mix-blend-mode: screen;
 }
 
-.stellar-cloud--ivory {
-  top: 18%;
-  right: -2%;
-  width: min(30vw, 360px);
-  height: min(36vh, 320px);
+.space-glow--teal {
+  top: -10%;
+  left: 24%;
+  width: min(36vw, 460px);
+  height: min(34vh, 300px);
   background:
-    radial-gradient(circle at 48% 50%, rgba(250, 244, 238, 0.22) 0%, rgba(250, 244, 238, 0.1) 24%, rgba(250, 244, 238, 0) 68%);
+    radial-gradient(circle at 50% 50%, rgba(110, 207, 232, 0.22) 0%, rgba(110, 207, 232, 0.08) 32%, rgba(110, 207, 232, 0) 74%);
   opacity: 0.74;
 }
 
-.stellar-dust {
+.space-glow--ivory {
+  top: 10%;
+  right: 4%;
+  width: min(30vw, 360px);
+  height: min(28vh, 240px);
+  background:
+    radial-gradient(circle at 52% 52%, rgba(249, 243, 228, 0.22) 0%, rgba(249, 243, 228, 0.08) 26%, rgba(249, 243, 228, 0) 70%);
+  opacity: 0.72;
+}
+
+.space-particles {
   position: absolute;
   inset: 0;
-  background-image:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.42) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 32% 70%, rgba(255, 255, 255, 0.24) 0 1px, transparent 1.7px),
-    radial-gradient(circle at 46% 36%, rgba(147, 224, 243, 0.34) 0 1.2px, transparent 1.9px),
-    radial-gradient(circle at 58% 18%, rgba(255, 255, 255, 0.34) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 66% 62%, rgba(191, 206, 221, 0.24) 0 1.2px, transparent 1.9px),
-    radial-gradient(circle at 84% 44%, rgba(255, 255, 255, 0.3) 0 1px, transparent 1.7px),
-    radial-gradient(circle at 78% 76%, rgba(150, 214, 237, 0.24) 0 1px, transparent 1.8px);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.26) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 32% 70%, rgba(255, 255, 255, 0.18) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 46% 36%, rgba(147, 224, 243, 0.24) 0 1.2px, transparent 1.9px),
+    radial-gradient(circle at 58% 18%, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 66% 62%, rgba(191, 206, 221, 0.16) 0 1.2px, transparent 1.9px),
+    radial-gradient(circle at 84% 44%, rgba(255, 255, 255, 0.18) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 78% 76%, rgba(150, 214, 237, 0.16) 0 1px, transparent 1.8px);
   background-repeat: no-repeat;
   mix-blend-mode: screen;
-  opacity: 0.38;
+  opacity: 0.34;
+  animation: space-particle-drift 22s linear infinite;
+}
+
+.ship-surface {
+  position: absolute;
+  right: -4%;
+  bottom: -6%;
+  width: min(76vw, 980px);
+  height: min(34vh, 320px);
+  clip-path: polygon(0 100%, 16% 12%, 74% 0, 100% 42%, 100% 100%);
+  background:
+    linear-gradient(180deg, rgba(52, 58, 66, 0.9) 0%, rgba(29, 33, 39, 0.96) 52%, rgba(8, 10, 14, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -30px 60px rgba(0, 0, 0, 0.32);
+}
+
+.ship-wing {
+  position: absolute;
+  left: 24%;
+  bottom: -7%;
+  width: min(22vw, 300px);
+  height: min(38vh, 360px);
+  clip-path: polygon(0 100%, 44% 16%, 100% 100%);
+  background:
+    linear-gradient(180deg, rgba(26, 31, 37, 0.98) 0%, rgba(8, 10, 14, 0.98) 100%);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.08),
+    0 -22px 42px rgba(0, 0, 0, 0.22);
+}
+
+.ship-panel {
+  position: absolute;
+  background:
+    linear-gradient(180deg, rgba(112, 121, 132, 0.14) 0%, rgba(21, 24, 29, 0.04) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  opacity: 0.82;
+}
+
+.ship-panel--left {
+  left: 43%;
+  bottom: 10%;
+  width: min(12vw, 140px);
+  height: min(5.2vh, 42px);
+  clip-path: polygon(0 100%, 24% 20%, 100% 0, 82% 68%, 22% 100%);
+}
+
+.ship-panel--center {
+  left: 55%;
+  bottom: 12%;
+  width: min(20vw, 230px);
+  height: min(6vh, 48px);
+  clip-path: polygon(0 86%, 18% 22%, 100% 0, 88% 54%, 12% 100%);
+}
+
+.ship-panel--right {
+  left: 67%;
+  bottom: 11%;
+  width: min(18vw, 210px);
+  height: min(5.4vh, 44px);
+  clip-path: polygon(0 92%, 22% 34%, 100% 8%, 86% 60%, 18% 100%);
+}
+
+@keyframes space-particle-drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  100% {
+    transform: translate3d(18px, 10px, 0);
+  }
 }
 
 .hero-header {
@@ -1781,13 +1856,18 @@ body {
     letter-spacing: 0.28em;
   }
 
-  .stellar-rift {
-    right: -18%;
-    width: min(88vw, 920px);
+  .lensing-halo {
+    width: min(40vw, 360px);
+    height: min(40vw, 360px);
   }
 
-  .stellar-cloud--rose {
-    width: min(72vw, 620px);
+  .ship-surface {
+    width: min(82vw, 860px);
+  }
+
+  .ship-wing {
+    left: 18%;
+    width: min(26vw, 260px);
   }
 
   .result-source-row {
@@ -1811,8 +1891,24 @@ body {
     letter-spacing: 0.22em;
   }
 
-  .stellar-rift-core,
-  .stellar-cloud--ivory {
+  .lensing-core,
+  .space-glow--ivory {
+    display: none;
+  }
+
+  .ship-surface {
+    width: 96vw;
+    height: min(28vh, 240px);
+    right: -10%;
+  }
+
+  .ship-wing {
+    left: 8%;
+    width: min(34vw, 180px);
+    height: min(28vh, 230px);
+  }
+
+  .ship-panel--right {
     display: none;
   }
 
