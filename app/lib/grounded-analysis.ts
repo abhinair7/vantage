@@ -501,6 +501,7 @@ async function buildGroundedAnalysis(
       ? "Best-effort read — the Gatekeeper would have withheld this brief because the evidence floor was not cleared. Do not use as decision-grade without a second pass."
       : undefined,
     overrideApplied: overrideApplied || undefined,
+    anchor: { label: place.name, center: place.center },
   };
 }
 
@@ -1737,6 +1738,7 @@ function buildFootprintResult(
       "Best next step for higher confidence: compare the map geometry against a recent satellite image and redraw if the site has changed.",
     ],
     kind: "answer",
+    anchor: { label: place.name, center: place.center },
   };
 }
 
@@ -1804,6 +1806,7 @@ function buildGeometryUnavailableResult(
       "Best next step: use imagery or another polygon-bearing source to draw the footprint.",
     ],
     kind: "insufficient",
+    anchor: { label: place.name, center: place.center },
   };
 }
 
@@ -2096,6 +2099,7 @@ function buildWithheldResult(
       "Best next step: narrow the location, add the operator name, or switch to a collection path with recurring EO or registry data.",
     ],
     kind: "insufficient",
+    anchor: { label: place.name, center: place.center },
   };
 }
 

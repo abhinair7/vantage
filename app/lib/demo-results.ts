@@ -71,6 +71,12 @@ export type DemoResult = {
    * The Result UI hides its "show analysis anyway" button when this is set.
    */
   overrideApplied?: boolean;
+  /**
+   * The resolved place this brief is anchored to. Used by the Result UI to
+   * compose follow-up and "Deepen" queries that re-enter the pipeline
+   * locked to the same AOI.
+   */
+  anchor?: { label: string; center: [number, number] };
 };
 
 export type AnalysisRunProfile = {

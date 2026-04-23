@@ -2062,3 +2062,118 @@ body {
     font-size: 16px;
   }
 }
+
+/* Thread breadcrumb + follow-up ask panel */
+.result-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.result-thread-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.result-thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.result-thread-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.result-thread-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fg-4);
+  flex: 0 0 auto;
+}
+.result-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.result-ask-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.result-ask-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.result-ask-hint {
+  margin: 0.2rem 0 0;
+  font-size: 13px;
+  color: var(--fg-2);
+  max-width: 56ch;
+  line-height: 1.5;
+}
+.result-ask-deepen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-1);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.result-ask-deepen:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--fg-3);
+}
+.result-ask-form {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+.result-ask-input {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--fg-1);
+  font: inherit;
+  font-size: 14px;
+}
+.result-ask-input::placeholder {
+  color: var(--fg-4);
+}
+.result-ask-input:focus {
+  outline: none;
+  border-color: var(--fg-3);
+}
+.result-ask-send {
+  padding: 0.55rem 1rem;
+  font-size: 13px;
+}

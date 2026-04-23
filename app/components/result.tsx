@@ -22,6 +22,19 @@ type Props = {
    * insufficient brief that still resolved a place.
    */
   onForceRun?: () => void;
+  /**
+   * Ask a new grounded question anchored to this brief's resolved place.
+   * The parent composes a query that keeps the AOI pinned so each turn
+   * re-enters the full pipeline instead of drifting into free chat.
+   */
+  onFollowUp?: (question: string) => void;
+  /**
+   * Broaden the read — trends, comparable sites, regulatory and press
+   * timeline around the same anchor. Also re-enters the pipeline.
+   */
+  onDeepen?: () => void;
+  /** Prior questions in this thread, newest last, excluding the current one. */
+  thread?: string[];
 };
 
 type BriefCard = {
@@ -34,7 +47,9 @@ type NarrativeSection = NarrativeChunk & {
   title: string;
 };
 
-export function Result({ result, onReset, onForceRun }: Props) {
+export function Result({ result, onReset, onForceRun, onFollowUp, onDeepen, thread }: Props) {
+  const [followUp, setFollowUp] = useState("");
+  const canAnchor = Boolean(result.anchor);
   const isInsufficient = result.kind === "insufficient";
   // Offer the override only when the place resolved cleanly (aoi exists)
   // and the Gatekeeper short-circuited before the full narrative ran.
@@ -230,6 +245,20 @@ export function Result({ result, onReset, onForceRun }: Props) {
         </motion.div>
       )}
 
+      {thread && thread.length > 0 && (
+        <motion.div {...reveal(0.06)} className="result-thread">
+          <span className="result-thread-eyebrow">Thread</span>
+          <ul className="result-thread-list">
+            {thread.map((q, i) => (
+              <li key={`${i}-${q}`} className="result-thread-item">
+                <span aria-hidden className="result-thread-dot" />
+                <span>{q}</span>
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
       <div className="result-analysis-flow">
         {sections.map((section, index) => (
           <motion.section
@@ -246,6 +275,55 @@ export function Result({ result, onReset, onForceRun }: Props) {
           </motion.section>
         ))}
       </div>
+
+      {canAnchor && (onFollowUp || onDeepen) && (
+        <motion.div {...reveal(0.28)} className="result-ask">
+          <div className="result-ask-header">
+            <div>
+              <p className="result-ask-eyebrow">Keep going</p>
+              <p className="result-ask-hint">
+                Anchored to {result.anchor!.label}. Follow-ups re-enter the grounded pipeline with the AOI pinned.
+              </p>
+            </div>
+            {onDeepen && (
+              <button
+                type="button"
+                className="result-ask-deepen"
+                onClick={onDeepen}
+                title="Broaden the read: trends, comparable sites, regulatory and press timeline."
+              >
+                <span aria-hidden>✦</span>
+                <span>Deepen analysis</span>
+              </button>
+            )}
+          </div>
+
+          {onFollowUp && (
+            <form
+              className="result-ask-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const q = followUp.trim();
+                if (!q) return;
+                onFollowUp(q);
+                setFollowUp("");
+              }}
+            >
+              <input
+                type="text"
+                value={followUp}
+                onChange={(e) => setFollowUp(e.target.value)}
+                placeholder={`Ask about ${result.anchor!.label} — flood risk, adjacent parcels, recent permits…`}
+                aria-label="Follow-up question"
+                className="result-ask-input"
+              />
+              <button type="submit" className="btn btn-primary result-ask-send" disabled={!followUp.trim()}>
+                Ask
+              </button>
+            </form>
+          )}
+        </motion.div>
+      )}
 
       {result.evidence.length > 0 && (
         <motion.details
