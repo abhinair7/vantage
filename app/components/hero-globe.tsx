@@ -9,9 +9,8 @@ import { TextureLoader } from "three";
 /**
  * Hero 3D Earth — orbital point-of-view.
  *
- * The planet is intentionally off-axis and held in a fixed composition so the
- * landing page reads like a still orbital poster frame rather than a product
- * camera move.
+ * The planet stays in a stable central composition so the landing page reads
+ * like a calm orbital scene rather than a product camera move.
  */
 
 type EarthTextures = {
@@ -20,6 +19,28 @@ type EarthTextures = {
   specularMap: THREE.Texture;
   cloudsMap: THREE.Texture;
 };
+
+type DebrisPiece = {
+  radius: number;
+  angle: number;
+  y: number;
+  scale: number;
+  speed: number;
+  tilt: [number, number, number];
+  kind: "panel" | "rock";
+  color: string;
+};
+
+const ORBITAL_DEBRIS: DebrisPiece[] = [
+  { radius: 1.9, angle: 0.3, y: 0.2, scale: 0.12, speed: 0.16, tilt: [0.4, 0.8, 0.2], kind: "panel", color: "#a8b4bf" },
+  { radius: 2.15, angle: 1.1, y: -0.18, scale: 0.1, speed: 0.13, tilt: [0.7, 0.3, 1.1], kind: "rock", color: "#8a96a1" },
+  { radius: 2.02, angle: 1.95, y: 0.08, scale: 0.14, speed: 0.15, tilt: [0.2, 1.2, 0.4], kind: "panel", color: "#b8c2cb" },
+  { radius: 2.28, angle: 2.7, y: -0.24, scale: 0.11, speed: 0.11, tilt: [1.0, 0.6, 0.2], kind: "rock", color: "#7e8b96" },
+  { radius: 1.84, angle: 3.35, y: 0.26, scale: 0.09, speed: 0.18, tilt: [0.5, 0.4, 1.0], kind: "panel", color: "#d1d8de" },
+  { radius: 2.22, angle: 4.1, y: -0.06, scale: 0.13, speed: 0.12, tilt: [0.4, 1.0, 0.6], kind: "rock", color: "#97a3ad" },
+  { radius: 2.06, angle: 4.9, y: 0.14, scale: 0.11, speed: 0.14, tilt: [0.8, 0.2, 0.7], kind: "panel", color: "#b3bec7" },
+  { radius: 1.96, angle: 5.55, y: -0.2, scale: 0.1, speed: 0.17, tilt: [0.3, 0.7, 1.2], kind: "rock", color: "#8895a0" },
+];
 
 /* ---------- Fresnel atmosphere shader ---------- */
 const AtmosphereMaterial = shaderMaterial(
@@ -136,7 +157,7 @@ function Earth({
   });
 
   return (
-    <group position={[1.12, -0.2, -0.28]} rotation={[-0.22, -0.36, 0.12]} scale={1.16}>
+    <group position={[0, 0, 0]} rotation={[-0.18, -0.3, 0.08]} scale={1.18}>
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -176,6 +197,110 @@ function Earth({
   );
 }
 
+function OrbitalDebris({ reducedMotion }: { reducedMotion: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame((state, delta) => {
+    const elapsed = state.clock.elapsedTime;
+    if (!groupRef.current) return;
+
+    groupRef.current.children.forEach((child, index) => {
+      const piece = ORBITAL_DEBRIS[index];
+      const angle = piece.angle + elapsed * (reducedMotion ? 0 : piece.speed);
+      child.position.x = Math.cos(angle) * piece.radius;
+      child.position.z = Math.sin(angle) * piece.radius;
+      child.position.y = piece.y + Math.sin(elapsed * 0.5 + index) * 0.02;
+      child.rotation.x += delta * 0.24;
+      child.rotation.y += delta * 0.18;
+      child.rotation.z += delta * 0.12;
+    });
+  });
+
+  return (
+    <group ref={groupRef} rotation={[-0.28, 0.28, 0.1]}>
+      {ORBITAL_DEBRIS.map((piece, index) => (
+        <mesh
+          key={`${piece.kind}-${index}`}
+          position={[
+            Math.cos(piece.angle) * piece.radius,
+            piece.y,
+            Math.sin(piece.angle) * piece.radius,
+          ]}
+          rotation={piece.tilt}
+          scale={piece.scale}
+        >
+          {piece.kind === "panel" ? (
+            <boxGeometry args={[1.1, 0.18, 1.85]} />
+          ) : (
+            <icosahedronGeometry args={[0.72, 0]} />
+          )}
+          <meshStandardMaterial
+            color={piece.color}
+            roughness={piece.kind === "panel" ? 0.48 : 0.92}
+            metalness={piece.kind === "panel" ? 0.36 : 0.1}
+            emissive={piece.kind === "panel" ? "#6d8297" : "#11161b"}
+            emissiveIntensity={piece.kind === "panel" ? 0.08 : 0.02}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SpaceParticles({ reducedMotion }: { reducedMotion: boolean }) {
+  const pointsRef = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const data = new Float32Array(210 * 3);
+    for (let i = 0; i < 210; i += 1) {
+      const stride = i * 3;
+      data[stride] = (Math.random() - 0.5) * 9.5;
+      data[stride + 1] = (Math.random() - 0.5) * 6.5;
+      data[stride + 2] = -4 + Math.random() * 8;
+    }
+    return data;
+  }, []);
+
+  useFrame((_, delta) => {
+    const points = pointsRef.current;
+    if (!points || reducedMotion) return;
+
+    const buffer = points.geometry.attributes.position;
+    const array = buffer.array as Float32Array;
+    for (let i = 0; i < array.length; i += 3) {
+      array[i] += delta * 0.018;
+      array[i + 1] += delta * 0.01;
+      array[i + 2] += delta * 0.28;
+
+      if (array[i + 2] > 4.5) {
+        array[i] = (Math.random() - 0.5) * 9.5;
+        array[i + 1] = (Math.random() - 0.5) * 6.5;
+        array[i + 2] = -4.5;
+      }
+    }
+    buffer.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions, 3]}
+          count={positions.length / 3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        color="#dce7f1"
+        size={0.028}
+        sizeAttenuation
+        transparent
+        opacity={0.62}
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
 export function HeroGlobe() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const textures = useEarthTextures();
@@ -194,11 +319,11 @@ export function HeroGlobe() {
         zIndex: 0,
         pointerEvents: "none",
         background:
-          "radial-gradient(circle at 54% 14%, rgba(116, 214, 235, 0.16) 0%, rgba(116, 214, 235, 0.06) 18%, rgba(4, 8, 12, 0) 42%), radial-gradient(circle at 16% 74%, rgba(210, 92, 118, 0.18) 0%, rgba(210, 92, 118, 0.08) 20%, rgba(5, 7, 11, 0) 44%), radial-gradient(ellipse at 50% 32%, #0e141c 0%, #05070b 58%, #010203 100%)",
+          "radial-gradient(circle at 50% 12%, rgba(131, 215, 236, 0.15) 0%, rgba(131, 215, 236, 0.06) 18%, rgba(5, 8, 12, 0) 42%), radial-gradient(circle at 84% 42%, rgba(211, 223, 235, 0.1) 0%, rgba(211, 223, 235, 0.04) 16%, rgba(5, 7, 11, 0) 40%), radial-gradient(ellipse at 50% 34%, #0d141b 0%, #05070b 58%, #010203 100%)",
       }}
     >
       <Canvas
-        camera={{ position: [-0.28, 0.1, 6.65], fov: 31 }}
+        camera={{ position: [0, 0.02, 6.7], fov: 31 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
@@ -223,10 +348,16 @@ export function HeroGlobe() {
           factor={2.2}
           saturation={0}
           fade
-          speed={0}
+          speed={reducedMotion ? 0 : 0.08}
         />
 
-        {textures && <Earth textures={textures} />}
+        <SpaceParticles reducedMotion={reducedMotion} />
+        {textures && (
+          <group position={[0, -0.06, -0.2]}>
+            <OrbitalDebris reducedMotion={reducedMotion} />
+            <Earth textures={textures} />
+          </group>
+        )}
       </Canvas>
     </div>
   );
