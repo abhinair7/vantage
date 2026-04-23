@@ -145,22 +145,16 @@ function HeroFull({
       <div className="hero-content">
         <div className="hero-shell hero-shell--centered">
           <div className="hero-copy hero-copy--centered">
-            <div className="hero-kicker-row">
-              <span className="hero-kicker">SITE DILIGENCE</span>
-              <span className="hero-kicker-divider" aria-hidden />
-              <span className="hero-kicker">CHANGE MONITORING</span>
-              <span className="hero-kicker-divider" aria-hidden />
-              <span className="hero-kicker">OPERATING DECISIONS</span>
-            </div>
-
             <div className="hero-caption">
               <h1 className="display-serif hero-headline hero-headline--premium">
-                Find the site.<br />
-                <em>Make</em> the call.
+                Assess a site,
+                <br />
+                corridor, or region.
               </h1>
               <p className="hero-sub hero-sub--premium">
-                Vantage turns open geospatial and public-entity data into a business
-                brief for diligence, monitoring, and strategic or operational decisions.
+                Vantage assembles open geospatial and public-record evidence into a
+                grounded decision brief for diligence, monitoring, and operational
+                planning.
               </p>
             </div>
           </div>
@@ -175,8 +169,6 @@ function HeroFull({
             >
               <div className="hero-input">
                 <div className="hero-input-shell">
-                  <span className="hero-input-label">EXAMPLE PROMPT</span>
-
                   <AnimatePresence mode="wait">
                     {!value.trim() && (
                       <motion.div

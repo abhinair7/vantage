@@ -23,8 +23,6 @@ type EarthTextures = {
   cloudsMap: THREE.Texture;
 };
 
-type PointerRef = MutableRefObject<{ x: number; y: number }>;
-
 /* ---------- Fresnel atmosphere shader ---------- */
 const AtmosphereMaterial = shaderMaterial(
   {
@@ -108,22 +106,19 @@ function useEarthTextures(): EarthTextures | null {
 
 function Earth({
   progress,
-  pointer,
   textures,
 }: {
   progress: ProgressRef;
-  pointer: PointerRef;
   textures: EarthTextures;
 }) {
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
-  const groupRef = useRef<THREE.Group>(null);
   const atmosRef = useRef<THREE.Mesh>(null);
   const mountAt = useRef<number | null>(null);
   const { colorMap, normalMap, specularMap, cloudsMap } = textures;
-  const specularColor = useMemo(() => new THREE.Color(0x336699), []);
-  const normalScale = useMemo(() => new THREE.Vector2(0.85, 0.85), []);
-  const emissiveColor = useMemo(() => new THREE.Color(0x061a42), []);
+  const specularColor = useMemo(() => new THREE.Color(0x526a84), []);
+  const normalScale = useMemo(() => new THREE.Vector2(0.82, 0.82), []);
+  const emissiveColor = useMemo(() => new THREE.Color(0x040f1b), []);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -135,11 +130,6 @@ function Earth({
     }
     if (cloudsRef.current) {
       cloudsRef.current.rotation.y = elapsed * 0.062;
-    }
-    if (groupRef.current) {
-      groupRef.current.position.y = pointer.current.y * 0.04;
-      groupRef.current.rotation.x = -pointer.current.y * 0.06;
-      groupRef.current.rotation.z = pointer.current.x * 0.035;
     }
 
     if (atmosRef.current) {
@@ -157,21 +147,13 @@ function Earth({
     const dollyTo = 4.2;
     const z = dollyFrom + (dollyTo - dollyFrom) * introEase - progress.current * 1.6;
     state.camera.position.z = z;
-    state.camera.position.x = THREE.MathUtils.lerp(
-      state.camera.position.x,
-      pointer.current.x * 0.3,
-      0.04,
-    );
-    state.camera.position.y = THREE.MathUtils.lerp(
-      state.camera.position.y,
-      pointer.current.y * 0.18,
-      0.04,
-    );
+    state.camera.position.x = 0;
+    state.camera.position.y = 0;
     state.camera.lookAt(0, 0, 0);
   });
 
   return (
-    <group ref={groupRef}>
+    <group position={[0, -0.04, 0]} rotation={[-0.14, 0, 0.08]}>
       <mesh ref={earthRef}>
         <sphereGeometry args={[1, 128, 128]} />
         <meshPhongMaterial
@@ -179,10 +161,10 @@ function Earth({
           normalMap={normalMap}
           specularMap={specularMap}
           specular={specularColor}
-          shininess={22}
+          shininess={18}
           normalScale={normalScale}
           emissive={emissiveColor}
-          emissiveIntensity={0.18}
+          emissiveIntensity={0.14}
         />
       </mesh>
 
@@ -203,8 +185,8 @@ function Earth({
           side={THREE.FrontSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
-          glowColor={new THREE.Color(0x4da6ff)}
-          intensity={1.1}
+          glowColor={new THREE.Color(0x8aa0b8)}
+          intensity={0.92}
         />
       </mesh>
     </group>
@@ -213,7 +195,6 @@ function Earth({
 
 export function HeroGlobe() {
   const progress = useRef(0);
-  const pointer = useRef({ x: 0, y: 0 });
   const [reducedMotion, setReducedMotion] = useState(false);
   const textures = useEarthTextures();
 
@@ -224,18 +205,10 @@ export function HeroGlobe() {
       const max = window.innerHeight * 0.9;
       progress.current = Math.min(1, Math.max(0, window.scrollY / max));
     };
-    const onPointerMove = (event: PointerEvent) => {
-      pointer.current = {
-        x: (event.clientX / window.innerWidth - 0.5) * 2,
-        y: (event.clientY / window.innerHeight - 0.5) * -2,
-      };
-    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     onScroll();
     return () => {
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("pointermove", onPointerMove);
     };
   }, []);
 
@@ -248,7 +221,7 @@ export function HeroGlobe() {
         zIndex: 0,
         pointerEvents: "none",
         background:
-          "radial-gradient(ellipse at 50% 36%, #0d1d3d 0%, #060e1f 40%, #020408 100%)",
+          "radial-gradient(ellipse at 50% 36%, #142235 0%, #070d16 42%, #010204 100%)",
       }}
     >
       <Canvas
@@ -258,16 +231,16 @@ export function HeroGlobe() {
         style={{ background: "transparent" }}
         frameloop={reducedMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.55} />
+        <ambientLight intensity={0.48} />
         <hemisphereLight
-          intensity={0.7}
-          color="#dde8f5"
-          groundColor="#080e1a"
+          intensity={0.6}
+          color="#dce5ef"
+          groundColor="#05080f"
         />
-        <directionalLight position={[5, 3, 4]} intensity={2.4} color="#fff5e6" />
-        <directionalLight position={[-4, 1, 3]} intensity={0.8} color="#c4d9f2" />
-        <directionalLight position={[-3, -1, -4]} intensity={0.5} color="#2a5aad" />
-        <pointLight position={[2, 1.5, 3]} intensity={0.9} color="#e0eeff" />
+        <directionalLight position={[5, 3, 4]} intensity={2.2} color="#f4f8fb" />
+        <directionalLight position={[-4, 1, 3]} intensity={0.74} color="#9bafc5" />
+        <directionalLight position={[-3, -1, -4]} intensity={0.34} color="#1b314d" />
+        <pointLight position={[2, 1.5, 3]} intensity={0.72} color="#d9e6f3" />
 
         <Stars
           radius={120}
@@ -279,7 +252,7 @@ export function HeroGlobe() {
           speed={reducedMotion ? 0 : 0.18}
         />
 
-        {textures && <Earth progress={progress} pointer={pointer} textures={textures} />}
+        {textures && <Earth progress={progress} textures={textures} />}
       </Canvas>
     </div>
   );
