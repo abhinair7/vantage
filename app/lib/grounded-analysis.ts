@@ -20,6 +20,12 @@ import {
 } from "./query-intel";
 
 const USER_AGENT = "Vantage/0.1 (+https://vantage-blond-nu.vercel.app)";
+// SEC EDGAR requires an email-format User-Agent per its fair-access policy;
+// generic browser-style strings are rate-limited or 403'd. Override via env
+// in production so the recruiter-visible default stays identifiable.
+const EDGAR_UA =
+  process.env.SEC_EDGAR_UA ??
+  "Vantage Grounded Analysis hello@vantage-prototype.dev";
 const REQUEST_TIMEOUT_MS = 6500;
 const CONFIDENCE_FLOOR = 0.58;
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
@@ -359,12 +365,16 @@ async function buildGroundedAnalysis(
     fetchRegionalNews(query, place, subject),
   ]);
 
+  // Deepen fan-out runs four independent enrichment fetchers in parallel.
+  // `settlePack` swallows per-task failures so a single rejected fetch (e.g.
+  // SEC rate limit, FEMA schema drift) doesn't empty the entire brief — the
+  // Gatekeeper already handles thin-evidence cases.
   const [filings, hazards, airq, permits] = deepen
     ? await Promise.all([
-        fetchEdgarFilings(place, wikidata),
-        fetchHazardSignals(place),
-        fetchAirQuality(place),
-        fetchPermitActivity(place),
+        settlePack(() => fetchEdgarFilings(place, wikidata), "edgar"),
+        settlePack(() => fetchHazardSignals(place), "hazards"),
+        settlePack(() => fetchAirQuality(place), "airq"),
+        settlePack(() => fetchPermitActivity(place), "permits"),
       ])
     : [[] as EdgarFiling[], [] as HazardHit[], [] as AirqHit[], [] as PermitHit[]];
 
@@ -493,8 +503,8 @@ async function buildGroundedAnalysis(
   const airqEvidenceIds = airq.slice(0, 3).map((a, index) =>
     addEvidence({
       kind: "measurement",
-      claim: `${a.parameter} reading ${a.value} ${a.unit} at ${a.location}.`,
-      source: `OpenAQ · latest within 25 km · ${formatPublishedDate(a.when)}`,
+      claim: `${a.parameter} reading ${formatAirqValue(a.value, a.unit)} at ${a.location}.`,
+      source: `Open-Meteo Air Quality · gridded reading · ${formatPublishedDate(a.when)}`,
       hashSeed: `airq:${query}:${a.location}:${a.parameter}:${index}`,
     }),
   );
@@ -582,10 +592,12 @@ async function buildGroundedAnalysis(
   }
 
   if (airq.length > 0) {
-    const lines = airq.slice(0, 3).map((a) => `${a.parameter} ${a.value} ${a.unit} (${a.location})`);
+    const lines = airq
+      .slice(0, 3)
+      .map((a) => `${a.parameter} ${formatAirqValue(a.value, a.unit)}`);
     narrative.push({
       title: "Air quality snapshot",
-      text: `${joinNatural(lines)}. Latest OpenAQ readings within 25 km of the anchor. Treat as point-in-time sensor output — meaningful for near-term operational planning, not a long-run air-quality model.`,
+      text: `${joinNatural(lines)}. Current reading for the Open-Meteo Air Quality grid cell at the anchor coordinate. Treat as point-in-time model output — meaningful for near-term operational planning, not a long-run air-quality model.`,
       refs: compactRefs([...(refs.airq ?? []), refs.place]),
     });
   }
@@ -607,27 +619,21 @@ async function buildGroundedAnalysis(
     Boolean(wiki),
     Boolean(news),
   );
-  const deepenBullets: string[] = [];
-  if (filings.length > 0) {
-    deepenBullets.push(
-      `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${filings.length} filing${filings.length === 1 ? "" : "s"} folded into the evidence ledger.`,
-    );
-  }
-  if (hazards.length > 0) {
-    deepenBullets.push(
-      `Consulted USGS earthquakes, NOAA active alerts, and FEMA disaster declarations for natural-hazard context; ${hazards.length} hazard item${hazards.length === 1 ? "" : "s"} recorded.`,
-    );
-  }
-  if (airq.length > 0) {
-    deepenBullets.push(
-      `Consulted OpenAQ for the latest air-quality sensor readings within 25 km of the anchor; ${airq.length} station reading${airq.length === 1 ? "" : "s"} recorded.`,
-    );
-  }
-  if (permits.length > 0) {
-    deepenBullets.push(
-      `Consulted city open-data portals for recent permit activity; ${permits.length} permit record${permits.length === 1 ? "" : "s"} recorded.`,
-    );
-  }
+  // Deepen methodology: one bullet per pack that actually returned evidence.
+  // Each bullet names the source so the reader can audit it independently.
+  const plural = (count: number, singular: string, plural: string) =>
+    `${count} ${count === 1 ? singular : plural}`;
+  const deepenBullets = [
+    filings.length > 0 &&
+      `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${plural(filings.length, "filing", "filings")} folded into the evidence ledger.`,
+    hazards.length > 0 &&
+      `Consulted USGS earthquakes, NOAA active alerts, and FEMA disaster declarations for natural-hazard context; ${plural(hazards.length, "hazard item", "hazard items")} recorded.`,
+    airq.length > 0 &&
+      `Consulted Open-Meteo Air Quality for the current gridded reading at the anchor; ${plural(airq.length, "parameter", "parameters")} recorded.`,
+    permits.length > 0 &&
+      `Consulted city open-data portals for recent permit activity; ${plural(permits.length, "permit record", "permit records")} recorded.`,
+  ].filter((bullet): bullet is string => Boolean(bullet));
+
   const withDeepenMethodology =
     deepenBullets.length > 0 ? [...baseMethodology, ...deepenBullets] : baseMethodology;
   const methodology = overrideApplied
@@ -1213,7 +1219,10 @@ async function fetchEdgarFilings(
 
   for (const candidate of candidates) {
     if (filings.length >= 4) break;
-    const term = candidate.trim();
+    // Strip embedded quotes before wrapping the term in quotes ourselves —
+    // otherwise a name like `A.P. Moller "Maersk"` breaks the EDGAR query
+    // syntax and returns noise (or nothing).
+    const term = candidate.replace(/["\\]/g, "").trim();
     if (!term || term.length < 3) continue;
 
     const params = new URLSearchParams({
@@ -1233,7 +1242,12 @@ async function fetchEdgarFilings(
           };
         }>;
       };
-    }>(`https://efts.sec.gov/LATEST/search-index?${params.toString()}&hits=5`);
+    }>(
+      `https://efts.sec.gov/LATEST/search-index?${params.toString()}&hits=5`,
+      // SEC fair-access policy wants an email-format UA; the generic
+      // Vantage UA will get rate-limited or rejected.
+      { headers: { "User-Agent": EDGAR_UA } },
+    );
 
     const hits = response?.hits?.hits ?? [];
     for (const hit of hits) {
@@ -1363,35 +1377,61 @@ async function fetchHazardSignals(place: ResolvedPlace): Promise<HazardHit[]> {
     }
   }
 
-  const settled = await Promise.all(tasks);
-  return settled.flat().slice(0, 5);
+  // Inner fan-out: USGS / NOAA / FEMA run independently and may fail
+  // independently. Use allSettled so one bad source (e.g. FEMA throwing on a
+  // schema change) doesn't strip the other two from the brief.
+  const settled = await Promise.allSettled(tasks);
+  return settled
+    .flatMap((entry, index) => {
+      if (entry.status === "fulfilled") return entry.value;
+      console.error("[grounded-analysis] hazard task rejected", {
+        index,
+        reason: entry.reason,
+      });
+      return [];
+    })
+    .slice(0, 5);
 }
 
 async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
+  // Open-Meteo Air Quality — free, no key, global. Returns a single gridded
+  // reading at the anchor coordinate rather than per-station data; the narrative
+  // now frames it as a "grid reading," not a nearby-station lookup.
+  // (OpenAQ v2 is deprecated and v3 gates behind an API key — not an option
+  // for this prototype's no-key promise.)
   const [lon, lat] = place.center;
+  const params = new URLSearchParams({
+    latitude: lat.toFixed(4),
+    longitude: lon.toFixed(4),
+    current: "us_aqi,pm10,pm2_5,ozone,nitrogen_dioxide",
+  });
   const r = await fetchJson<{
-    results?: Array<{
-      location?: string;
-      city?: string;
-      measurements?: Array<{
-        parameter?: string;
-        value?: number;
-        unit?: string;
-        lastUpdated?: string;
-      }>;
-    }>;
-  }>(`https://api.openaq.org/v2/latest?coordinates=${lat},${lon}&radius=25000&limit=3`);
-  return (r?.results ?? []).flatMap((loc) => {
-    const measurement = (loc.measurements ?? []).find(
-      (m) => m.parameter && m.value != null && m.unit && m.lastUpdated,
-    );
-    if (!measurement) return [];
+    current?: Record<string, number | string | null> & { time?: string };
+    current_units?: Record<string, string>;
+  }>(`https://air-quality-api.open-meteo.com/v1/air-quality?${params.toString()}`);
+
+  const current = r?.current;
+  if (!current || !current.time) return [];
+  const units = r?.current_units ?? {};
+
+  // Stable display order so the brief reads the same across runs.
+  const parameterOrder: Array<{ key: string; label: string; fallbackUnit: string }> = [
+    { key: "us_aqi", label: "US AQI", fallbackUnit: "" },
+    { key: "pm2_5", label: "PM2.5", fallbackUnit: "μg/m³" },
+    { key: "pm10", label: "PM10", fallbackUnit: "μg/m³" },
+    { key: "ozone", label: "Ozone", fallbackUnit: "μg/m³" },
+    { key: "nitrogen_dioxide", label: "NO₂", fallbackUnit: "μg/m³" },
+  ];
+
+  return parameterOrder.flatMap(({ key, label, fallbackUnit }) => {
+    const raw = current[key];
+    if (typeof raw !== "number" || Number.isNaN(raw)) return [];
     return [{
-      location: loc.location || loc.city || "Nearby station",
-      parameter: (measurement.parameter || "").toUpperCase(),
-      value: measurement.value!,
-      unit: measurement.unit!,
-      when: measurement.lastUpdated!,
+      location: `${place.name} (Open-Meteo grid)`,
+      parameter: label,
+      value: raw,
+      unit: units[key] ?? fallbackUnit,
+      when: String(current.time),
     }];
   });
 }
@@ -1511,15 +1551,21 @@ async function fetchPermitActivity(place: ResolvedPlace): Promise<PermitHit[]> {
   const active = sources.filter((s) => s.matches);
   if (active.length === 0) return [];
 
-  const results = await Promise.all(
-    active.map((s) =>
-      fetchJson<Array<Record<string, unknown>>>(s.endpoint).then(
-        (rows) => ({ source: s, rows: rows ?? [] }),
-      ),
-    ),
+  // Socrata endpoints are independently flaky — allSettled prevents one 5xx
+  // from dropping the other cities' permits from the brief.
+  const settled = await Promise.allSettled(
+    active.map(async (source) => {
+      const rows = (await fetchJson<Array<Record<string, unknown>>>(source.endpoint)) ?? [];
+      return { source, rows };
+    }),
   );
 
-  return results.flatMap(({ source, rows }) => {
+  return settled.flatMap((entry) => {
+    if (entry.status !== "fulfilled") {
+      console.error("[grounded-analysis] permit source rejected", entry.reason);
+      return [];
+    }
+    const { source, rows } = entry.value;
     if (!Array.isArray(rows)) return [];
     return rows
       .map((r) => source.mapper(r))
@@ -1527,12 +1573,20 @@ async function fetchPermitActivity(place: ResolvedPlace): Promise<PermitHit[]> {
   });
 }
 
+// FEMA's OData `$filter` interpolates this value — we validate it hard so a
+// malformed Nominatim response can't slip junk into the query string.
+const US_STATE_CODE_PATTERN = /^[A-Z]{2}$/;
+
 function usStateCode(address: Record<string, string>): string | null {
   const iso = address["ISO3166-2-lvl4"];
-  if (iso && iso.toUpperCase().startsWith("US-")) return iso.slice(3).toUpperCase();
+  if (iso && iso.toUpperCase().startsWith("US-")) {
+    const candidate = iso.slice(3).toUpperCase();
+    if (US_STATE_CODE_PATTERN.test(candidate)) return candidate;
+  }
   const name = (address.state || "").toLowerCase();
   if (!name) return null;
-  return US_STATE_CODES[name] || null;
+  const fromMap = US_STATE_CODES[name];
+  return fromMap && US_STATE_CODE_PATTERN.test(fromMap) ? fromMap : null;
 }
 
 const US_STATE_CODES: Record<string, string> = {
@@ -1561,10 +1615,14 @@ function buildGdeltSearchQuery(place: ResolvedPlace, topicTerms: string[]): stri
     place.address.county ||
     place.address.suburb;
 
-  const location = cityLike && cityLike.toLowerCase() !== place.name.toLowerCase() ? cityLike : place.name;
+  const rawLocation =
+    cityLike && cityLike.toLowerCase() !== place.name.toLowerCase() ? cityLike : place.name;
+  // Strip quote chars before wrapping — place names occasionally contain `"`
+  // (e.g. a nickname in quotes) which would break the GDELT query grammar.
+  const location = rawLocation?.replace(/["\\]/g, "").trim();
   if (!location) return null;
 
-  const topic = topicTerms[0];
+  const topic = topicTerms[0]?.replace(/["\\]/g, "").trim();
   return topic ? `"${location}" AND ${topic}` : `"${location}"`;
 }
 
@@ -3287,6 +3345,18 @@ function formatPublishedDate(value: string): string {
   }).format(new Date(value));
 }
 
+/**
+ * Air-quality values need two rendering modes: AQI is a rounded index, the
+ * concentration parameters (μg/m³) read better with one decimal. Keep the
+ * unit attached only when Open-Meteo actually supplies one.
+ */
+function formatAirqValue(value: number, unit: string): string {
+  const trimmedUnit = unit.trim();
+  const number =
+    trimmedUnit === "" || Number.isInteger(value) ? Math.round(value).toString() : value.toFixed(1);
+  return trimmedUnit ? `${number} ${trimmedUnit}` : number;
+}
+
 function haversineKm(a: [number, number], b: [number, number]): number {
   const toRad = (value: number) => (value * Math.PI) / 180;
   const [lon1, lat1] = a;
@@ -3314,6 +3384,22 @@ function joinNatural(items: string[]): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Best-effort wrapper around a single enrichment fetcher. A rejecting task
+ * shouldn't nuke the whole pack — the pipeline is explicitly designed to
+ * serve partial evidence and let the Gatekeeper decide. Rejections are
+ * logged and substituted with an empty array so downstream code keeps
+ * the same shape.
+ */
+async function settlePack<T>(task: () => Promise<T[]>, label: string): Promise<T[]> {
+  try {
+    return await task();
+  } catch (error) {
+    console.error("[grounded-analysis] pack failed", { label, error });
+    return [];
+  }
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {

@@ -1,10 +1,17 @@
 /**
- * Pre-baked demo analyses.
- * Each result is what Vantage would return — narrative with inline evidence refs,
- * evidence ledger with sources/timestamps, AOI polygon(s), confidence score.
+ * Result shape and showcase presets.
  *
- * In the real system these come from the 10-node pipeline. Here they're static
- * fixtures so the prototype is a working demo without live API dependencies.
+ * `DemoResult` is the shared contract between the grounded pipeline,
+ * the API route, and the result UI. Every brief — live or preset — has
+ * the same shape: headline, narrative with inline evidence refs, an
+ * evidence ledger with sources and hashes, an optional AOI polygon,
+ * a confidence score, and the anchor the brief is pinned to.
+ *
+ * `DEMO_RESULTS` holds a small set of curated showcase briefs used as
+ * reliable examples for demos and e2e screenshots — the rest of the
+ * app runs live against OSM, Wikidata, Wikipedia, GDELT, Google News,
+ * SEC EDGAR, USGS, NOAA, FEMA, Open-Meteo, and several city permit
+ * portals via `grounded-analysis.ts`.
  */
 
 export type Evidence = {
@@ -83,11 +90,6 @@ export type DemoResult = {
    * locked to the same AOI.
    */
   anchor?: { label: string; center: [number, number] };
-};
-
-export type AnalysisRunProfile = {
-  id: string;
-  tookMs: number;
 };
 
 /* ------------------------------------------------------------------
@@ -510,21 +512,6 @@ export function matchPresetQuery(q: string): DemoResult | null {
   const candidates = scorePresetQuery(q);
   if (candidates[0].score >= 2) return DEMO_RESULTS[candidates[0].id];
   return null;
-}
-
-export function estimateRunProfile(q: string): AnalysisRunProfile {
-  const preset = matchPresetQuery(q);
-  if (preset) {
-    return {
-      id: preset.id,
-      tookMs: preset.tookMs,
-    };
-  }
-
-  return {
-    id: `run_${hashString(q).toString(16)}`,
-    tookMs: 2300 + (hashString(`${q}:latency`) % 1200),
-  };
 }
 
 export function buildUnavailableResult(query: string): DemoResult {

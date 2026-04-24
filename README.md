@@ -1,103 +1,146 @@
-# Vantage — working prototype
+# Vantage
 
-An Apple-light, chat-first interface to Earth observation. One input. One
-answer. Every claim carries its evidence. When the evidence isn't there, the
-answer says so.
+**Grounded geospatial and public-record briefs for any site, corridor, or region.**
 
-This repo is a **runnable prototype of the product**, not a marketing page for
-it. You type a question, the pipeline runs in-line through its 10 nodes, and
-the answer drops in with a map, inline citations, and an evidence ledger.
-Results are pre-baked fixtures — no keys, no external services, no paid APIs.
+Live at **https://vantage-blond-nu.vercel.app**
+
+Type a question about a place. Vantage resolves the location, calls the real
+public data stack, scores the evidence, and returns a cited brief — or refuses
+when the signal is too thin. Every claim in the output links to a source.
+
+The point: a general LLM will *generate* an answer. Vantage *fetches* one,
+binds every claim to a citation, and says "I don't know" when it should. That's
+the moat.
+
+---
+
+## Architecture at a glance
+
+```
+         ┌────────────────────────────────────────────────┐
+         │                  Prompt (UI)                   │
+         │       hero · follow-up · Deepen action         │
+         └───────────────────────┬────────────────────────┘
+                                 │  { query, force, deepen }
+                                 ▼
+                    POST /api/analyze  (Next.js route)
+                                 │
+                                 ▼
+         ┌────────────────────────────────────────────────┐
+         │          grounded-analysis pipeline            │
+         │                                                │
+         │  1. Mode detector      (investigate/verify/    │
+         │                         monitor + footprint)   │
+         │  2. Spatial resolver   (OSM Nominatim, reverse │
+         │                         geocode, place match)  │
+         │  3. Nearby context     (Overpass, per-subject  │
+         │                         radius + tag filters)  │
+         │  4. Entity graph       (Wikidata operators,    │
+         │                         owners, industries)    │
+         │  5. Background         (Wikipedia extracts)    │
+         │  6. Fresh reporting    (Google News RSS +      │
+         │                         GDELT timeline)        │
+         │  7. Gatekeeper         (evidence floor 0.58 +  │
+         │                         substantive-context)   │
+         │                                                │
+         │  — on Deepen, also in parallel —               │
+         │                                                │
+         │  8.  Regulatory        (SEC EDGAR full-text)   │
+         │  9.  Hazard            (USGS · NOAA · FEMA)    │
+         │  10. Environment       (Open-Meteo air qual.)  │
+         │  11. Permit activity   (Socrata: NYC, SF,      │
+         │                         Chicago, Seattle, LA)  │
+         │                                                │
+         │  12. Narrative + citation verifier             │
+         │  13. Headline + brief card builder             │
+         │  14. AOI polygon builder (for the map view)    │
+         └───────────────────────┬────────────────────────┘
+                                 │
+                                 ▼
+                           DemoResult JSON
+                                 │
+                                 ▼
+         ┌────────────────────────────────────────────────┐
+         │                   Result (UI)                  │
+         │   MapLibre AOI · narrative with inline refs    │
+         │   · evidence ledger · method & limits          │
+         │   · follow-up input · Deepen button · thread   │
+         └────────────────────────────────────────────────┘
+```
+
+Each Deepen pack fires in parallel and appends a narrative chunk **only if the
+pack returns something**. No empty sections, no hallucinated filler.
+
+---
+
+## Data sources — all free, no paid keys
+
+| Layer              | Source                    | Scope             |
+| ------------------ | ------------------------- | ----------------- |
+| Geocoding          | OpenStreetMap Nominatim   | Global            |
+| Features / POIs    | Overpass API              | Global            |
+| Entity graph       | Wikidata                  | Global            |
+| Background         | Wikipedia                 | Global            |
+| Fresh reporting    | Google News RSS · GDELT   | Global            |
+| Regulatory filings | SEC EDGAR full-text       | Global companies  |
+| Earthquakes        | USGS Earthquake Hazards   | Global            |
+| Weather alerts     | NOAA / NWS                | US                |
+| Disaster decs.     | OpenFEMA                  | US (state)        |
+| Air quality        | Open-Meteo Air Quality    | Global            |
+| Permit activity    | Socrata open-data portals | NYC, SF, Chicago, Seattle, LA |
+
+Every fetcher has a 6.5 s timeout, no retries, and falls through silently if
+the source is down. The Gatekeeper decides whether the remaining evidence is
+enough to serve a brief.
+
+> SEC EDGAR requires an email-format `User-Agent`. The default is a
+> placeholder; set `SEC_EDGAR_UA="Your Name your@email.com"` before deploying
+> at any real traffic volume.
+
+---
+
+## Why it's defensible vs. a general LLM
+
+1. **No hallucinated geography.** Coordinates, operators, filings, hazards
+   come from live calls, not training weights.
+2. **Refuses when the signal is thin.** The Gatekeeper's 0.58 floor produces a
+   withheld brief instead of plausible-sounding prose. An optional
+   *"show analysis anyway"* override exists, and the result is visibly stamped
+   as a best-effort read capped below the floor.
+3. **Every claim is auditable.** Evidence IDs, click-through source links,
+   SHA-like hashes, a methodology bullet list.
+4. **Fresh by construction.** Google News, GDELT, NOAA active alerts,
+   Open-Meteo air quality. No training-cutoff blind spot.
+5. **Place-native and reproducible.** Results anchor to an AOI; follow-ups
+   re-enter the same pipeline with the anchor pinned.
 
 ---
 
 ## Run it locally
 
-Requires Node 18.18+ (tested on Node 25). No API keys needed.
+Requires Node 18.18+. No keys, no billing, no `.env` file.
 
 ```bash
 git clone https://github.com/abhinair7/vantage.git
 cd vantage
 npm install
-npm run dev
-```
-
-Then open **http://localhost:3000** in your browser.
-
-> **Important:** open in a normal foreground tab. The MapLibre canvas relies
-> on `requestAnimationFrame`, which browsers pause in backgrounded tabs — if
-> you keep the tab hidden, the map won't paint.
-
-### Other scripts
-
-```bash
-npm run build     # production build
-npm start         # serve the production build (after build)
+npm run dev     # http://localhost:3000
+npm run build   # production build
+npm start       # serve the built app
 ```
 
 ---
 
-## What to try
+## Try these queries
 
-From the idle hero, click a suggestion chip or type one of:
-
-1. **"Has construction at Mundra Port increased over the last 6 months?"**
-   → Investigate mode. 8.4 % quay-footprint delta across two Sentinel-2
-   passes, SAR corroboration, AIS berth occupancy, ownership chain. Map shows
-   October 2024 footprint (dashed) vs. February 2025 footprint (accent blue).
-
-2. **"Has oil storage at Cushing, Oklahoma changed since March?"**
-   → Monitor mode. 4.2 M-barrel drawdown via floating-roof shadow analysis.
-   SAR fallback on cloudy passes. Confidence 0.79.
-
-3. **"Verify this company's manufacturing facility in Shenzhen exists."**
-   → Verify mode. Facility confirmed via two independent Sentinel-2 passes,
-   ownership crosswalk (OSM → Overture → OpenCorporates), sanctions-list
-   clean. Confidence 0.92.
-
-**Anything else** — e.g. "How many penguins are in Antarctica?" — hits the
-fallback: **Insufficient Evidence**. That's not an error state. It's the
-product behaving correctly: the Gatekeeper refused to hand the question to
-the LLM because the sources aren't there.
-
----
-
-## How the flow is wired
-
-Three states, in `app/page.tsx`:
-
-```
- idle   ──ask──▶  running  ──done──▶  done   ──reset──▶  idle
-```
-
-- **idle** — centered hero (`components/prompt.tsx`, `compact: false`).
-- **running** — slim top bar + animated pipeline rail through the 10 nodes
-  (`components/runner.tsx`). Each node is labelled by touch class:
-  `LLM · ON A LEASH`, `VISION MODEL`, or `DETERMINISTIC`.
-- **done** — two-column pane (`components/result.tsx`): MapLibre map with
-  AOI polygons on the left, headline + narrative with inline citation chips
-  + evidence ledger + methodology on the right.
-
-Pre-baked results live in `app/lib/demo-results.ts`. A cheap keyword matcher
-decides which fixture to return; below threshold, the insufficient-evidence
-fixture is returned.
-
-The 10-node pipeline model (what each node does, what it's guarded on, what
-touches the LLM) lives in `app/lib/pipeline.ts`.
-
----
-
-## Stack
-
-- **Next.js 16.2.4** (App Router, Turbopack) · **React 19.2.4** · **TypeScript** strict
-- **Tailwind v4** with `@theme inline` tokens
-- **MapLibre GL JS 5.23** · light positron raster tiles from CartoDB (no key)
-- `next/font/google` — Inter (resolves to SF Pro via `-apple-system` on macOS)
-  plus JetBrains Mono for numbers / eyebrows
-
-Design tokens are defined in `app/globals.css`. Palette: white (`#FFFFFF`),
-paper (`#FBFBFD`), surface (`#F5F5F7`), ink (`#1D1D1F`), Apple blue accent
-(`#0071E3`).
+- `Mundra Port construction activity` → investigate brief with news lead.
+- `Cushing, Oklahoma oil storage` → monitor brief.
+- `Tesla Gigafactory Nevada` → click **Deepen** to pull SEC filings + state
+  hazard context.
+- `Give me a read on Hell's Kitchen, New York` → click **Deepen** to pull NYC
+  DOB permits and NOAA alerts.
+- Anything vague (`"how many penguins in Antarctica"`) → the Gatekeeper
+  withholds and tells you why.
 
 ---
 
@@ -105,37 +148,50 @@ paper (`#FBFBFD`), surface (`#F5F5F7`), ink (`#1D1D1F`), Apple blue accent
 
 ```
 app/
-  globals.css                  tokens + primitives
-  layout.tsx                   next/font wiring
-  page.tsx                     state machine (idle → running → done)
+  globals.css                tokens, hero + result styles
+  layout.tsx                 fonts + <html>
+  page.tsx                   idle / loading / done state machine
+  api/analyze/route.ts       POST → analyzeQuery({ force, deepen })
   components/
-    prompt.tsx                 hero + compact top bar
-    runner.tsx                 animated 10-node pipeline rail
-    map-view.tsx               MapLibre map with AOI polygons
-    result.tsx                 headline + narrative + evidence ledger
+    hero-globe.tsx           Three.js Earth with PBR material
+    prompt.tsx               hero + compact ask bar
+    map-view.tsx             MapLibre AOI renderer
+    result.tsx               brief layout + follow-up + Deepen
+    smooth-scroll.tsx        small helper
   lib/
-    pipeline.ts                the 10 nodes (verbatim from Technical Report §7)
-    demo-results.ts            pre-baked fixtures + fuzzy matcher
-    queries.ts                 specimen queries + modes
+    grounded-analysis.ts     pipeline: fetchers + narrative + gatekeeper
+    demo-results.ts          shared types + curated presets
+    query-intel.ts           mode / subject / measurement detection
+public/
+  textures/                  earth day/normal/specular/clouds maps
 ```
+
+Production build is ~170 KB first-load JS. Earth textures are served as static
+assets from `public/`.
 
 ---
 
-## Things worth knowing
+## Design notes
 
-- **No live LLM, no live satellite pipeline.** Every answer comes from the
-  static fixtures in `app/lib/demo-results.ts`. The point of the prototype is
-  the *interaction model* — ask, see the pipeline, receive a cited answer —
-  not the backend.
-- **Every narrative chunk carries `evidence_refs`.** The rendering code only
-  shows text that has at least one ref, mirroring the Technical Report §7.9
-  Citation Verifier's rule: strip chunks that fail attribution.
-- **Silence is a feature.** If the keyword matcher can't clear threshold the
-  answer returned is "Insufficient evidence" with a methodology breakdown —
-  never a made-up answer.
+- **Single source-of-truth type.** `DemoResult` is the contract between the
+  pipeline, the API, and the UI — presets and live runs produce the same
+  shape so the UI never branches on data origin.
+- **Gatekeeper with override.** The evidence floor is a real guardrail, but
+  the override is a visible, opt-in escape hatch with a capped confidence —
+  you can't accidentally trust an override result as decision-grade.
+- **Anchored follow-ups.** Each brief carries an `anchor` (label + lat/lon).
+  Follow-ups compose `"{question} near {anchor}"` and re-enter the full
+  pipeline — no free-chat drift, same citation discipline every turn.
+- **Parallel everything under Deepen.** EDGAR, USGS, NOAA, FEMA, Open-Meteo,
+  and permit portals are fired concurrently via `Promise.allSettled` and
+  bounded by a shared request timeout — a single failing source never strips
+  the others from the brief.
+- **Satellite-operator aesthetic.** Mono telemetry metadata (`CONF`, `T+`,
+  `REFS`), hairline dividers, tick-marked section labels, coordinate readout.
+  The goal is a console, not a slide deck.
 
 ---
 
 ## License
 
-Prototype / internal — not open source.
+Prototype — not open source.

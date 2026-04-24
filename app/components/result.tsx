@@ -258,17 +258,21 @@ export function Result({ result, onReset, onForceRun, onFollowUp, onDeepen, thre
       )}
 
       {thread && thread.length > 0 && (
-        <motion.div {...reveal(0.06)} className="result-thread">
+        <motion.nav
+          {...reveal(0.06)}
+          className="result-thread"
+          aria-label="Prior questions in this brief"
+        >
           <span className="result-thread-eyebrow">Thread</span>
-          <ul className="result-thread-list">
+          <ol className="result-thread-list">
             {thread.map((q, i) => (
               <li key={`${i}-${q}`} className="result-thread-item">
                 <span aria-hidden className="result-thread-dot" />
                 <span>{q}</span>
               </li>
             ))}
-          </ul>
-        </motion.div>
+          </ol>
+        </motion.nav>
       )}
 
       <div className="result-analysis-flow">
