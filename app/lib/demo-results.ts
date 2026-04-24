@@ -585,6 +585,13 @@ export const SUGGESTED_QUERIES: {
     deepen: true,
     hint: "Deepen · NYC DOB permits + NOAA alerts.",
   },
+  {
+    label: "Port of Hamburg · logistics",
+    query: "Port of Hamburg logistics operations",
+    mode: "investigate",
+    deepen: true,
+    hint: "Deepen · GDACS + EONET + GLEIF (global, non-US).",
+  },
 ];
 
 function hashString(value: string): number {

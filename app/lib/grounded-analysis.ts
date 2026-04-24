@@ -272,10 +272,33 @@ type EdgarFiling = {
 };
 
 type HazardHit = {
-  kind: "earthquake" | "alert" | "disaster";
+  /**
+   * - earthquake: USGS (global)
+   * - alert:      NOAA NWS (US-only)
+   * - disaster:   FEMA (US-only)
+   * - gdacs:      GDACS active global disaster (EU JRC, global)
+   * - eonet:      NASA EONET natural event (global)
+   */
+  kind: "earthquake" | "alert" | "disaster" | "gdacs" | "eonet";
   summary: string;
   whenIso?: string;
   url?: string;
+};
+
+/**
+ * Global Legal Entity Identifier (LEI) record from GLEIF.
+ * Replaces / augments SEC EDGAR for non-US jurisdictions. GLEIF is the
+ * ISO-standard global entity registry — it doesn't give you filings, but it
+ * gives you a stable entity identity (LEI, legal name, country, status,
+ * headquarters) for counterparties anywhere in the world, free and keyless.
+ */
+type GleifEntity = {
+  lei: string;
+  legalName: string;
+  country: string;
+  status: string;
+  registrationStatus?: string;
+  url: string;
 };
 
 type AirqHit = {
@@ -303,6 +326,7 @@ type EvidenceRefs = {
   hazards?: string[];
   airq?: string[];
   permits?: string[];
+  gleif?: string[];
 };
 
 type ContextSnapshot = {
@@ -365,18 +389,32 @@ async function buildGroundedAnalysis(
     fetchRegionalNews(query, place, subject),
   ]);
 
-  // Deepen fan-out runs four independent enrichment fetchers in parallel.
+  // Deepen fan-out runs five independent enrichment fetchers in parallel.
   // `settlePack` swallows per-task failures so a single rejected fetch (e.g.
   // SEC rate limit, FEMA schema drift) doesn't empty the entire brief — the
   // Gatekeeper already handles thin-evidence cases.
-  const [filings, hazards, airq, permits] = deepen
+  //
+  // Coverage split:
+  //   - EDGAR:   US corporate filings only (still US-only by source scope)
+  //   - Hazards: always runs USGS + GDACS + EONET (global), adds NOAA + FEMA in US
+  //   - Air Q:   Open-Meteo gridded reading (global)
+  //   - Permits: US cities only (permit APIs don't exist globally yet)
+  //   - GLEIF:   global entity identity (works everywhere, no US gate)
+  const [filings, hazards, airq, permits, gleif] = deepen
     ? await Promise.all([
         settlePack(() => fetchEdgarFilings(place, wikidata), "edgar"),
         settlePack(() => fetchHazardSignals(place), "hazards"),
         settlePack(() => fetchAirQuality(place), "airq"),
         settlePack(() => fetchPermitActivity(place), "permits"),
+        settlePack(() => fetchGleifEntity(place, wikidata), "gleif"),
       ])
-    : [[] as EdgarFiling[], [] as HazardHit[], [] as AirqHit[], [] as PermitHit[]];
+    : [
+        [] as EdgarFiling[],
+        [] as HazardHit[],
+        [] as AirqHit[],
+        [] as PermitHit[],
+        [] as GleifEntity[],
+      ];
 
   const wiki = await fetchWikipediaBrief(place.wikipediaTag ?? wikidata?.wikipediaTag);
   const topFeatures = features.slice(0, 5);
@@ -484,13 +522,18 @@ async function buildGroundedAnalysis(
     }),
   );
 
-  const hazardEvidenceIds = hazards.slice(0, 4).map((h, index) => {
+  const hazardEvidenceIds = hazards.slice(0, 6).map((h, index) => {
+    const whenSuffix = h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : "";
     const sourceLabel =
       h.kind === "earthquake"
-        ? `USGS · M2.5+ within 200 km${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`
+        ? `USGS · M2.5+ within 200 km${whenSuffix}`
         : h.kind === "alert"
-          ? `NOAA NWS · active alert${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`
-          : `FEMA · disaster declaration${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`;
+          ? `NOAA NWS · active alert${whenSuffix}`
+          : h.kind === "disaster"
+            ? `FEMA · disaster declaration${whenSuffix}`
+            : h.kind === "gdacs"
+              ? `GDACS · active global disaster${whenSuffix}`
+              : `NASA EONET · open natural event${whenSuffix}`;
     return addEvidence({
       kind: "event",
       claim: h.summary,
@@ -519,6 +562,16 @@ async function buildGroundedAnalysis(
     }),
   );
 
+  const gleifEvidenceIds = gleif.slice(0, 4).map((entity, index) =>
+    addEvidence({
+      kind: "entity",
+      claim: `${entity.legalName} (${entity.country}) — LEI ${entity.lei}, status ${entity.status.toLowerCase()}.`,
+      source: `GLEIF · Global LEI record · ${entity.country}`,
+      sourceUrl: entity.url,
+      hashSeed: `gleif:${query}:${entity.lei}:${index}`,
+    }),
+  );
+
   const refs: EvidenceRefs = {
     place: placeEvidenceId,
     context: contextEvidenceId,
@@ -529,6 +582,7 @@ async function buildGroundedAnalysis(
     hazards: hazardEvidenceIds,
     airq: airqEvidenceIds,
     permits: permitEvidenceIds,
+    gleif: gleifEvidenceIds,
   };
 
   // When recent local reporting exists, news leads the brief — everything
@@ -584,9 +638,17 @@ async function buildGroundedAnalysis(
 
   if (hazards.length > 0) {
     const heads = hazards.slice(0, 3).map((h) => h.summary);
+    const activeKinds = Array.from(new Set(hazards.map((h) => h.kind)));
+    const sourcesUsed = [
+      activeKinds.includes("earthquake") && "USGS (global seismic)",
+      activeKinds.includes("gdacs") && "GDACS (global disaster alerts)",
+      activeKinds.includes("eonet") && "NASA EONET (global natural events)",
+      activeKinds.includes("alert") && "NOAA (active US weather alerts)",
+      activeKinds.includes("disaster") && "FEMA (US disaster declarations)",
+    ].filter((v): v is string => Boolean(v));
     narrative.push({
       title: "Hazard and alert context",
-      text: `${joinNatural(heads)}. Pulled from USGS (global seismic), NOAA (active US weather alerts), and FEMA (US disaster declarations). This is the free-source natural-hazard read for the anchor, not a full catastrophe model.`,
+      text: `${joinNatural(heads)}. Pulled from ${joinNatural(sourcesUsed)}. This is the free-source natural-hazard read for the anchor, not a full catastrophe model.`,
       refs: compactRefs([...(refs.hazards ?? []), refs.place]),
     });
   }
@@ -612,6 +674,16 @@ async function buildGroundedAnalysis(
     });
   }
 
+  if (gleif.length > 0) {
+    const top = gleif.slice(0, 3);
+    const lines = top.map((g) => `${g.legalName} (${g.country}) — LEI ${g.lei}`);
+    narrative.push({
+      title: "Global entity identity",
+      text: `${joinNatural(lines)}. Pulled from the Global LEI Foundation — the ISO-standard worldwide entity registry. This is the non-US analogue of SEC EDGAR: it doesn't return filings, but it gives you stable, verifiable counterparty identity (legal name, country, status) for ownership-chain work anywhere in the world.`,
+      refs: compactRefs([...(refs.gleif ?? []), refs.entity, refs.place]),
+    });
+  }
+
   const baseMethodology = buildMethodology(
     subject,
     place,
@@ -627,11 +699,13 @@ async function buildGroundedAnalysis(
     filings.length > 0 &&
       `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${plural(filings.length, "filing", "filings")} folded into the evidence ledger.`,
     hazards.length > 0 &&
-      `Consulted USGS earthquakes, NOAA active alerts, and FEMA disaster declarations for natural-hazard context; ${plural(hazards.length, "hazard item", "hazard items")} recorded.`,
+      `Consulted USGS earthquakes (global), GDACS (global disaster alerts), NASA EONET (global natural events), and — when the anchor is US — NOAA active alerts and FEMA declarations; ${plural(hazards.length, "hazard item", "hazard items")} recorded.`,
     airq.length > 0 &&
       `Consulted Open-Meteo Air Quality for the current gridded reading at the anchor; ${plural(airq.length, "parameter", "parameters")} recorded.`,
     permits.length > 0 &&
       `Consulted city open-data portals for recent permit activity; ${plural(permits.length, "permit record", "permit records")} recorded.`,
+    gleif.length > 0 &&
+      `Consulted the Global LEI Foundation for ISO-standard entity identity around the anchor; ${plural(gleif.length, "LEI record", "LEI records")} recorded.`,
   ].filter((bullet): bullet is string => Boolean(bullet));
 
   const withDeepenMethodology =
@@ -1284,6 +1358,14 @@ async function fetchHazardSignals(place: ResolvedPlace): Promise<HazardHit[]> {
 
   const tasks: Array<Promise<HazardHit[]>> = [];
 
+  // Global: GDACS active disasters (earthquake, tropical cyclone, flood,
+  // volcano, wildfire, drought). Free, keyless RSS from EU JRC.
+  tasks.push(fetchGdacsEvents(lat, lon));
+
+  // Global: NASA EONET open natural events (wildfires, storms, volcanoes,
+  // landslides, drought, sea ice, etc.). Free, keyless JSON.
+  tasks.push(fetchEonetEvents(lat, lon));
+
   // USGS Earthquakes — global
   tasks.push((async () => {
     const params = new URLSearchParams({
@@ -1377,9 +1459,9 @@ async function fetchHazardSignals(place: ResolvedPlace): Promise<HazardHit[]> {
     }
   }
 
-  // Inner fan-out: USGS / NOAA / FEMA run independently and may fail
-  // independently. Use allSettled so one bad source (e.g. FEMA throwing on a
-  // schema change) doesn't strip the other two from the brief.
+  // Inner fan-out: GDACS / EONET / USGS / NOAA / FEMA run independently and
+  // may fail independently. Use allSettled so one bad source (e.g. FEMA
+  // throwing on a schema change) doesn't strip the others from the brief.
   const settled = await Promise.allSettled(tasks);
   return settled
     .flatMap((entry, index) => {
@@ -1390,7 +1472,164 @@ async function fetchHazardSignals(place: ResolvedPlace): Promise<HazardHit[]> {
       });
       return [];
     })
-    .slice(0, 5);
+    .slice(0, 6);
+}
+
+/**
+ * GDACS — Global Disaster Alert and Coordination System (EU JRC).
+ *
+ * Public RSS of active global disasters with per-event coordinates. Filter
+ * client-side to events within ~500 km of the anchor so a Bangalore query
+ * doesn't surface an Ecuadorian eruption. Free, keyless, global.
+ */
+async function fetchGdacsEvents(
+  anchorLat: number,
+  anchorLon: number,
+): Promise<HazardHit[]> {
+  const xml = await fetchText("https://www.gdacs.org/xml/rss.xml");
+  if (!xml) return [];
+
+  const items = Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)).slice(0, 80);
+  const hits: HazardHit[] = [];
+
+  for (const match of items) {
+    const body = match[1];
+    const title = readXmlTag(body, "title");
+    const link = readXmlTag(body, "link");
+    const pubDate = readXmlTag(body, "pubDate");
+    // GDACS stamps every item with <geo:Point><geo:lat> and <geo:long>.
+    const latStr = readXmlTag(body, "geo:lat") || readXmlTag(body, "geo:Point");
+    const lonStr = readXmlTag(body, "geo:long") || readXmlTag(body, "geo:Point");
+    const lat = Number(latStr);
+    const lon = Number(lonStr);
+    if (!title || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    const km = haversineKm([anchorLon, anchorLat], [lon, lat]);
+    if (km > 500) continue;
+
+    hits.push({
+      kind: "gdacs",
+      summary: `${title} (~${Math.round(km)} km from anchor)`,
+      whenIso: normalizeDateString(pubDate) ?? undefined,
+      url: link || undefined,
+    });
+
+    if (hits.length >= 3) break;
+  }
+
+  return hits;
+}
+
+/**
+ * NASA EONET — Earth Observatory Natural Event Tracker.
+ *
+ * Global open natural events (wildfires, severe storms, volcanoes,
+ * landslides, drought, dust, ice, etc.). Bbox-filter ~2° around the anchor
+ * (~220 km) so results stay locally relevant. Free, keyless, global.
+ */
+async function fetchEonetEvents(
+  anchorLat: number,
+  anchorLon: number,
+): Promise<HazardHit[]> {
+  // EONET bbox is W,N,E,S (min lon, max lat, max lon, min lat)
+  const pad = 2;
+  const bbox = [anchorLon - pad, anchorLat + pad, anchorLon + pad, anchorLat - pad]
+    .map((n) => n.toFixed(3))
+    .join(",");
+
+  type EonetEvent = {
+    id?: string;
+    title?: string;
+    link?: string;
+    categories?: Array<{ title?: string }>;
+    geometry?: Array<{ date?: string; coordinates?: [number, number] }>;
+  };
+
+  const data = await fetchJson<{ events?: EonetEvent[] }>(
+    `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=10&bbox=${bbox}`,
+  );
+
+  if (!data?.events?.length) return [];
+
+  return data.events.slice(0, 3).flatMap((event) => {
+    if (!event.title) return [];
+    const category = event.categories?.[0]?.title ?? "Natural event";
+    const latest = event.geometry?.[event.geometry.length - 1];
+    return [{
+      kind: "eonet" as const,
+      summary: `${category}: ${event.title}`,
+      whenIso: latest?.date,
+      url: event.link,
+    }];
+  });
+}
+
+/**
+ * GLEIF — Global Legal Entity Identifier lookup.
+ *
+ * ISO-standard global entity registry. Doesn't return filings, but returns a
+ * stable identity (LEI, legal name, country, status, headquarters) for any
+ * counterparty anywhere in the world. This is what SEC EDGAR is for US
+ * corporate diligence — for everywhere else, it's GLEIF. Free, keyless.
+ */
+async function fetchGleifEntity(
+  place: ResolvedPlace,
+  wikidata: WikidataProfile | null,
+): Promise<GleifEntity[]> {
+  const candidates: string[] = [];
+  if (wikidata?.operators?.length) candidates.push(...wikidata.operators.slice(0, 2));
+  if (wikidata?.owners?.length) candidates.push(...wikidata.owners.slice(0, 2));
+  if (candidates.length === 0) candidates.push(place.name);
+
+  const seen = new Set<string>();
+  const entities: GleifEntity[] = [];
+
+  for (const candidate of candidates) {
+    if (entities.length >= 4) break;
+    const term = candidate.replace(/["\\]/g, "").trim();
+    if (!term || term.length < 3) continue;
+
+    type GleifRecord = {
+      id?: string;
+      attributes?: {
+        lei?: string;
+        entity?: {
+          legalName?: { name?: string };
+          legalAddress?: { country?: string };
+          status?: string;
+        };
+        registration?: { status?: string };
+      };
+    };
+
+    const response = await fetchJson<{ data?: GleifRecord[] }>(
+      `https://api.gleif.org/api/v1/lei-records?filter[entity.legalName]=${encodeURIComponent(
+        term,
+      )}&page[size]=3`,
+    );
+
+    const records = response?.data ?? [];
+    for (const rec of records) {
+      if (entities.length >= 4) break;
+      const lei = rec.attributes?.lei;
+      const legalName = rec.attributes?.entity?.legalName?.name;
+      const country = rec.attributes?.entity?.legalAddress?.country;
+      if (!lei || !legalName || !country) continue;
+      if (seen.has(lei)) continue;
+      seen.add(lei);
+
+      entities.push({
+        lei,
+        legalName,
+        country,
+        status: rec.attributes?.entity?.status ?? "UNKNOWN",
+        registrationStatus: rec.attributes?.registration?.status,
+        url: `https://search.gleif.org/#/record/${lei}`,
+      });
+    }
+  }
+
+  return entities;
 }
 
 async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
