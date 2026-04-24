@@ -2368,3 +2368,171 @@ body {
   padding: 0.55rem 1rem;
   font-size: 13px;
 }
+
+/* ------------------------------------------------------------------
+   Mobile polish (<= 560px)
+   Surgical overrides for small phones. Larger tablets are already
+   handled by the 980 / 720 / 640 breakpoints above.
+   ------------------------------------------------------------------ */
+
+@media (max-width: 640px) {
+  /* Page gutters tighten up so content breathes on 375px viewports */
+  .page,
+  .page-wide {
+    padding-inline: clamp(0.85rem, 4vw, 1.2rem);
+  }
+
+  /* Compact header — let the query textarea shrink instead of wrap */
+  .compact-bar {
+    gap: 0.55rem;
+    padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  }
+  .compact-brand {
+    font-size: 13px;
+  }
+  .compact-divider {
+    display: none;
+  }
+  .compact-input {
+    font-size: 15px;
+    min-width: 0;
+    padding: 0.4rem 0;
+  }
+  .compact-bar .btn.btn-primary {
+    padding: 0.45rem 0.9rem !important;
+    font-size: 13px !important;
+  }
+
+  /* Map chrome — wrap the segmented control instead of overflowing.
+     On mobile it sits in a full-width row at the top of the map. */
+  .map-chrome {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    left: 0.6rem !important;
+    right: 0.6rem !important;
+    top: 0.6rem !important;
+    gap: 0.2rem;
+    padding: 0.28rem;
+    border-radius: 12px;
+  }
+  .map-chrome .seg {
+    padding: 0.22rem 0.48rem;
+    font-size: 11px;
+  }
+  .map-chrome .divider {
+    display: none;
+  }
+  /* Hide the redundant "SATELLITE DEFAULT" pill on mobile — the active
+     segment in .map-chrome already conveys the same info, and the pill
+     would otherwise overlap the basemap control on narrow screens. */
+  .map-scene-pill {
+    display: none;
+  }
+  /* Push the polygon badges below the now full-width map-chrome so they
+     no longer collide with the segmented basemap control. */
+  .map-badges {
+    top: 3.8rem !important;
+  }
+  .map-attribution {
+    font-size: 10px;
+    max-width: calc(100% - 1rem);
+    padding: 0.32rem 0.5rem;
+  }
+
+  /* Result hero — pull the left-tick accent inward, scale the headline */
+  .result-hero {
+    padding: 1.1rem 0 0.3rem 0.85rem;
+    gap: 0.75rem;
+  }
+  .result-hero-headline {
+    font-size: clamp(22px, 6.5vw, 30px);
+    line-height: 1.15;
+  }
+  .result-hero-topline {
+    font-size: 14px;
+  }
+  .result-hero-meta {
+    gap: 0.5rem;
+    font-size: 10px;
+  }
+  .result-hero-coord {
+    gap: 0.4rem;
+    font-size: 10px;
+  }
+
+  /* Analysis block — already 1-col at 720px; tighten left padding */
+  .result-analysis-block {
+    padding: 1.1rem 0 1.1rem 0.85rem;
+  }
+  .result-analysis-body {
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+
+  /* Brief row stacks fully (existing 640px rule handles borders) */
+  .result-brief-item {
+    padding: 0.9rem 1rem;
+  }
+
+  /* Thread breadcrumb + Deepen card tighten up */
+  .result-thread {
+    padding: 0.75rem 0.9rem;
+  }
+  .result-ask {
+    padding: 0.95rem 1rem;
+    gap: 0.75rem;
+  }
+  .result-ask-header {
+    gap: 0.6rem;
+  }
+  .result-ask-form {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .result-ask-send {
+    width: 100%;
+    padding: 0.6rem 1rem;
+  }
+
+  /* Hero suggested chips — a notch smaller, stay wrapable */
+  .hero-suggested {
+    margin-top: 1rem;
+  }
+  .hero-suggested-chip {
+    padding: 0.42rem 0.7rem;
+    font-size: 12px;
+  }
+  .hero-suggested-chip-mode {
+    font-size: 9px;
+    padding: 0.08rem 0.32rem;
+  }
+}
+
+@media (max-width: 420px) {
+  /* Tiny phones — drop the orphaned left-edge tick and trim more */
+  .result-hero {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .result-hero::before {
+    display: none;
+  }
+  .result-analysis-block {
+    padding-left: 0;
+  }
+  .result-analysis-block::before {
+    display: none;
+  }
+
+  /* Hero wordmark + sub copy read tighter at 375px */
+  .hero-wordmark {
+    font-size: clamp(1.5rem, 9vw, 2.2rem);
+    letter-spacing: 0.2em;
+  }
+  .hero-sub,
+  .hero-sub--premium {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+}

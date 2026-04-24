@@ -319,6 +319,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(
 
       {/* Bottom-left: corner badges (label + date per polygon) */}
       <div
+        className="map-badges"
         style={{
           position: "absolute",
           top: "0.8rem",
