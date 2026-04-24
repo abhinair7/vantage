@@ -5,7 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { query?: string; force?: boolean };
+    const body = (await request.json()) as {
+      query?: string;
+      force?: boolean;
+      deepen?: boolean;
+    };
     const query = body.query?.trim();
 
     if (!query) {
@@ -15,7 +19,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await analyzeQuery(query, { force: body.force === true });
+    const result = await analyzeQuery(query, {
+      force: body.force === true,
+      deepen: body.deepen === true,
+    });
     return NextResponse.json({ result });
   } catch (error) {
     console.error("[api/analyze] request failed", error);

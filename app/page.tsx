@@ -43,7 +43,7 @@ export default function Home() {
   const [thread, setThread] = useState<string[]>([]);
   const requestRef = useRef(0);
 
-  const handleAsk = useCallback((query: string, force = false) => {
+  const handleAsk = useCallback((query: string, force = false, deepen = false) => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
 
@@ -52,7 +52,7 @@ export default function Home() {
     void fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, force }),
+      body: JSON.stringify({ query, force, deepen }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Analyze failed with ${response.status}`);
@@ -101,7 +101,7 @@ export default function Home() {
     const anchor = phase.result.anchor;
     if (!anchor) return;
     pushToThread(phase.query);
-    handleAsk(composeDeepenQuery(anchor.label));
+    handleAsk(composeDeepenQuery(anchor.label), false, true);
   }, [phase, pushToThread, handleAsk]);
 
   const isDone = phase.kind === "done";

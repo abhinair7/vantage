@@ -256,12 +256,21 @@ type NewsSnapshot = {
   freshestHours: number | null;
 };
 
+type EdgarFiling = {
+  company: string;
+  form: string;
+  filedAt: string;
+  url: string;
+  cik: string;
+};
+
 type EvidenceRefs = {
   place: string;
   context?: string;
   entity?: string;
   background?: string;
   news?: string[];
+  filings?: string[];
 };
 
 type ContextSnapshot = {
@@ -280,6 +289,12 @@ export type AnalyzeOptions = {
    * stamped with a visible disclaimer.
    */
   force?: boolean;
+  /**
+   * Run the broader-synthesis path: additionally query SEC EDGAR for
+   * regulatory filings around the resolved place or its operator and fold
+   * those hits into the evidence ledger and narrative.
+   */
+  deepen?: boolean;
 };
 
 export async function analyzeQuery(
@@ -289,7 +304,7 @@ export async function analyzeQuery(
   const preset = matchPresetQuery(query);
   if (preset) return preset;
 
-  const grounded = await buildGroundedAnalysis(query, opts.force === true);
+  const grounded = await buildGroundedAnalysis(query, opts.force === true, opts.deepen === true);
   if (grounded) return grounded;
 
   return buildNoMatchResult(query);
@@ -298,6 +313,7 @@ export async function analyzeQuery(
 async function buildGroundedAnalysis(
   query: string,
   force: boolean,
+  deepen: boolean = false,
 ): Promise<DemoResult | null> {
   const mode = detectMode(query);
   const subject = detectSubject(query);
@@ -316,6 +332,8 @@ async function buildGroundedAnalysis(
     fetchWikidataProfile(place.wikidataId),
     fetchRegionalNews(query, place, subject),
   ]);
+
+  const filings: EdgarFiling[] = deepen ? await fetchEdgarFilings(place, wikidata) : [];
 
   const wiki = await fetchWikipediaBrief(place.wikipediaTag ?? wikidata?.wikipediaTag);
   const topFeatures = features.slice(0, 5);
@@ -413,12 +431,23 @@ async function buildGroundedAnalysis(
       }),
     ) ?? [];
 
+  const filingEvidenceIds = filings.slice(0, 3).map((filing, index) =>
+    addEvidence({
+      kind: "event",
+      claim: `SEC ${filing.form} on file for ${filing.company} — ${filing.filedAt}.`,
+      source: `SEC EDGAR · Form ${filing.form} · filed ${filing.filedAt}`,
+      sourceUrl: filing.url,
+      hashSeed: `edgar:${query}:${filing.cik}:${filing.form}:${filing.filedAt}:${index}`,
+    }),
+  );
+
   const refs: EvidenceRefs = {
     place: placeEvidenceId,
     context: contextEvidenceId,
     entity: entityEvidenceId,
     background: backgroundEvidenceId,
     news: newsEvidenceIds,
+    filings: filingEvidenceIds,
   };
 
   // When recent local reporting exists, news leads the brief — everything
@@ -462,6 +491,15 @@ async function buildGroundedAnalysis(
         },
       ];
 
+  if (filings.length > 0) {
+    const filingNames = Array.from(new Set(filings.slice(0, 3).map((f) => f.company)));
+    const filingForms = Array.from(new Set(filings.slice(0, 3).map((f) => f.form)));
+    narrative.push({
+      text: `Regulatory timeline: SEC EDGAR returns ${filings.length} matching filing${filings.length === 1 ? "" : "s"} (${filingForms.join(", ")}) tied to ${joinNatural(filingNames)}. These are the on-record public disclosures around the anchor, not press coverage — treat them as an audit trail, not a live operational read.`,
+      refs: compactRefs([...(refs.filings ?? []), refs.entity, refs.place]),
+    });
+  }
+
   const baseMethodology = buildMethodology(
     subject,
     place,
@@ -469,13 +507,20 @@ async function buildGroundedAnalysis(
     Boolean(wiki),
     Boolean(news),
   );
+  const withDeepenMethodology =
+    filings.length > 0
+      ? [
+          ...baseMethodology,
+          `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${filings.length} matching filing${filings.length === 1 ? "" : "s"} folded into the evidence ledger.`,
+        ]
+      : baseMethodology;
   const methodology = overrideApplied
     ? [
         "Evidence-floor override applied at the customer's request — the Gatekeeper would normally have withheld this brief.",
-        ...baseMethodology,
+        ...withDeepenMethodology,
         `Auto-computed confidence landed at ${Math.round(confidence * 100)}%, below the 58% floor Vantage uses for decision-grade output.`,
       ]
-    : baseMethodology;
+    : withDeepenMethodology;
   const reportedConfidence = overrideApplied
     ? Number(Math.min(confidence, CONFIDENCE_FLOOR - 0.01).toFixed(2))
     : confidence;
@@ -1034,6 +1079,69 @@ async function fetchGdeltArticles(query: string): Promise<NewsArticle[]> {
         queryScope: "gdelt" as const,
       }];
     });
+}
+
+async function fetchEdgarFilings(
+  place: ResolvedPlace,
+  wikidata: WikidataProfile | null,
+): Promise<EdgarFiling[]> {
+  // Prefer named operators/owners when the place is a known asset; fall back
+  // to the place name so the search still runs for generic sites.
+  const candidates: string[] = [];
+  if (wikidata?.operators?.length) candidates.push(...wikidata.operators.slice(0, 2));
+  if (wikidata?.owners?.length) candidates.push(...wikidata.owners.slice(0, 2));
+  if (candidates.length === 0) candidates.push(place.name);
+
+  const seen = new Set<string>();
+  const filings: EdgarFiling[] = [];
+
+  for (const candidate of candidates) {
+    if (filings.length >= 4) break;
+    const term = candidate.trim();
+    if (!term || term.length < 3) continue;
+
+    const params = new URLSearchParams({
+      q: `"${term}"`,
+      forms: "10-K,10-Q,8-K,20-F,6-K",
+    });
+    const response = await fetchJson<{
+      hits?: {
+        hits?: Array<{
+          _id?: string;
+          _source?: {
+            display_names?: string[];
+            file_date?: string;
+            form?: string;
+            adsh?: string;
+            ciks?: string[];
+          };
+        }>;
+      };
+    }>(`https://efts.sec.gov/LATEST/search-index?${params.toString()}&hits=5`);
+
+    const hits = response?.hits?.hits ?? [];
+    for (const hit of hits) {
+      if (filings.length >= 4) break;
+      const src = hit._source;
+      if (!src?.adsh || !src.ciks?.[0] || !src.form || !src.file_date) continue;
+      const key = src.adsh;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const cikInt = String(Number(src.ciks[0])); // strip leading zeros
+      const adshNoDashes = src.adsh.replace(/-/g, "");
+      const url = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cikInt}&type=${encodeURIComponent(src.form)}&dateb=&owner=include&count=10`;
+      filings.push({
+        company: src.display_names?.[0]?.replace(/\s*\(CIK\s+\d+\)\s*$/i, "").trim() ?? term,
+        form: src.form,
+        filedAt: src.file_date,
+        url,
+        cik: cikInt,
+      });
+    }
+  }
+
+  return filings;
 }
 
 function buildGdeltSearchQuery(place: ResolvedPlace, topicTerms: string[]): string | null {

@@ -191,19 +191,31 @@ export function Result({ result, onReset, onForceRun, onFollowUp, onDeepen, thre
       <motion.header {...reveal(0.04)} className="result-hero">
         <p className="result-hero-meta">
           <span className={isInsufficient ? "result-hero-tag is-bad" : "result-hero-tag"}>
-            {isInsufficient ? "Brief withheld" : `${titleCaseMode(result.mode)} brief`}
+            {isInsufficient ? "BRIEF WITHHELD" : `${result.mode.toUpperCase()} · BRIEF`}
           </span>
           {!isInsufficient && (
             <>
               <span aria-hidden>·</span>
-              <span>{Math.round(result.confidence * 100)}% confidence</span>
+              <span>CONF {Math.round(result.confidence * 100)}%</span>
             </>
           )}
           <span aria-hidden>·</span>
-          <span>{(result.tookMs / 1000).toFixed(1)}s</span>
+          <span>T+{(result.tookMs / 1000).toFixed(1)}s</span>
+          <span aria-hidden>·</span>
+          <span>{result.evidence.length} REFS</span>
         </p>
         <h2 className="result-hero-headline">{result.headline}</h2>
         <p className="result-hero-topline">{topline}</p>
+        {result.anchor && (
+          <p className="result-hero-coord">
+            <strong>ANCHOR</strong>
+            <span>{result.anchor.label}</span>
+            <span aria-hidden>·</span>
+            <span>
+              {result.anchor.center[1].toFixed(4)}°, {result.anchor.center[0].toFixed(4)}°
+            </span>
+          </p>
+        )}
       </motion.header>
 
       <div className="result-brief-row" aria-hidden={briefCards.length === 0}>
@@ -460,18 +472,21 @@ function deriveSections(result: DemoResult): NarrativeSection[] {
       "Commercial read-through",
       "Confidence and limits",
       "Recommended next step",
+      "Regulatory timeline",
     ],
     verify: [
       "Site validation",
       "Risk relevance",
       "Confidence and limits",
       "Recommended next step",
+      "Regulatory timeline",
     ],
     monitor: [
       "Operating picture",
       "Signal read-through",
       "Confidence and limits",
       "Recommended next step",
+      "Regulatory timeline",
     ],
   };
 
