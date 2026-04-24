@@ -906,6 +906,122 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* --- Suggested-query chips (below the hero input) ---------------------- */
+.hero-suggested {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.hero-suggested-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.hero-suggested-tick {
+  display: inline-block;
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.55;
+}
+.hero-suggested-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.hero-suggested-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(12, 16, 20, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: var(--fg-2, rgba(255, 255, 255, 0.82));
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+  animation: vantage-chip-pulse 3.6s ease-in-out infinite;
+}
+.hero-suggested-chip:hover,
+.hero-suggested-chip:focus-visible {
+  border-color: rgba(118, 198, 255, 0.6);
+  background: rgba(20, 28, 38, 0.72);
+  color: #fff;
+  outline: none;
+  transform: translateY(-1px);
+  animation-play-state: paused;
+}
+.hero-suggested-chip:active {
+  transform: translateY(0);
+}
+.hero-suggested-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #7fc2ff;
+  box-shadow: 0 0 0 0 rgba(127, 194, 255, 0.55);
+  animation: vantage-chip-dot 1.8s ease-in-out infinite;
+}
+.hero-suggested-chip-label {
+  font-weight: 500;
+}
+.hero-suggested-chip-mode {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--fg-4, rgba(255, 255, 255, 0.6));
+  background: rgba(255, 255, 255, 0.03);
+}
+.hero-suggested-chip:hover .hero-suggested-chip-mode,
+.hero-suggested-chip:focus-visible .hero-suggested-chip-mode {
+  border-color: rgba(118, 198, 255, 0.45);
+  color: #bfe1ff;
+}
+@keyframes vantage-chip-pulse {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 0 rgba(127, 194, 255, 0);
+  }
+  50% {
+    border-color: rgba(127, 194, 255, 0.35);
+    box-shadow: 0 0 0 4px rgba(127, 194, 255, 0.08);
+  }
+}
+@keyframes vantage-chip-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 194, 255, 0.55); opacity: 0.75; }
+  50% { box-shadow: 0 0 0 6px rgba(127, 194, 255, 0); opacity: 1; }
+}
+@media (max-width: 560px) {
+  .hero-suggested-chip-mode { display: none; }
+  .hero-suggested-chip { font-size: 12px; padding: 0.45rem 0.7rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-suggested-chip,
+  .hero-suggested-chip-dot {
+    animation: none;
+  }
+}
+
 .telescope--disabled {
   display: none;
 }

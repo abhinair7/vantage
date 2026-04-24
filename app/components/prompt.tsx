@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { EXAMPLE_PROMPTS } from "../lib/demo-results";
+import { EXAMPLE_PROMPTS, SUGGESTED_QUERIES } from "../lib/demo-results";
+
+type SubmitOptions = { deepen?: boolean };
 
 type Props = {
-  onSubmit: (q: string) => void;
+  onSubmit: (q: string, options?: SubmitOptions) => void;
   compact?: boolean;
   initialValue?: string;
   loading?: boolean;
@@ -58,10 +60,15 @@ export function Prompt({ onSubmit, compact, initialValue, loading = false }: Pro
     autoGrow();
   }, [compact, value]);
 
-  const submit = () => {
+  const submit = (options?: SubmitOptions) => {
     const q = value.trim();
     if (!q) return;
-    onSubmit(q);
+    onSubmit(q, options);
+  };
+
+  const runSuggested = (query: string, options?: SubmitOptions) => {
+    setValue(query);
+    onSubmit(query, options);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -117,6 +124,7 @@ export function Prompt({ onSubmit, compact, initialValue, loading = false }: Pro
       value={value}
       setValue={setValue}
       submit={submit}
+      runSuggested={runSuggested}
       inputRef={ref}
       onKeyDown={onKeyDown}
       ghostPrompt={EXAMPLE_PROMPTS[exampleIndex]?.query ?? ""}
@@ -129,6 +137,7 @@ function HeroFull({
   value,
   setValue,
   submit,
+  runSuggested,
   inputRef,
   onKeyDown,
   ghostPrompt,
@@ -136,7 +145,8 @@ function HeroFull({
 }: {
   value: string;
   setValue: (v: string) => void;
-  submit: () => void;
+  submit: (options?: SubmitOptions) => void;
+  runSuggested: (query: string, options?: SubmitOptions) => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   ghostPrompt: string;
@@ -227,6 +237,42 @@ function HeroFull({
                 </motion.p>
               )}
             </AnimatePresence>
+
+            {!loading && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
+                className="hero-suggested"
+                aria-label="Suggested queries"
+              >
+                <span className="hero-suggested-eyebrow">
+                  <span aria-hidden className="hero-suggested-tick" />
+                  Try one of these
+                </span>
+                <ul className="hero-suggested-list">
+                  {SUGGESTED_QUERIES.map((suggestion, index) => (
+                    <li key={suggestion.query}>
+                      <button
+                        type="button"
+                        className="hero-suggested-chip"
+                        onClick={() =>
+                          runSuggested(suggestion.query, { deepen: suggestion.deepen })
+                        }
+                        style={{ animationDelay: `${index * 0.45}s` }}
+                        title={suggestion.hint}
+                      >
+                        <span aria-hidden className="hero-suggested-chip-dot" />
+                        <span className="hero-suggested-chip-label">{suggestion.label}</span>
+                        <span className="hero-suggested-chip-mode">
+                          {suggestion.deepen ? "DEEPEN" : suggestion.mode.toUpperCase()}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+            )}
           </div>
         </div>
       </div>

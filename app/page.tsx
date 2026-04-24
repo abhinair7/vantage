@@ -73,6 +73,16 @@ export default function Home() {
       });
   }, []);
 
+  // Prompt's onSubmit signature passes a flag object; page unpacks it into
+  // handleAsk's positional args so suggested-chip clicks can auto-fire Deepen
+  // without touching the free-text submit path.
+  const handlePromptSubmit = useCallback(
+    (query: string, options?: { deepen?: boolean }) => {
+      handleAsk(query, false, options?.deepen ?? false);
+    },
+    [handleAsk],
+  );
+
   const handleReset = useCallback(() => {
     setPhase({ kind: "idle" });
     setThread([]);
@@ -115,7 +125,7 @@ export default function Home() {
 
       {!isDone && (
         <Prompt
-          onSubmit={handleAsk}
+          onSubmit={handlePromptSubmit}
           initialValue={isLoading ? phase.query : undefined}
           loading={isLoading}
         />
@@ -123,7 +133,7 @@ export default function Home() {
 
       {isDone && (
         <>
-          <Prompt compact onSubmit={handleAsk} initialValue={phase.query} />
+          <Prompt compact onSubmit={handlePromptSubmit} initialValue={phase.query} />
           <Result
             result={phase.result}
             onReset={handleReset}

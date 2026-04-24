@@ -545,6 +545,48 @@ export const EXAMPLE_PROMPTS: { label: string; query: string }[] = [
   { label: "Verify Shenzhen facility", query: SHENZHEN.query },
 ];
 
+/**
+ * Showcase queries surfaced as clickable chips on the hero. Each one is a
+ * known-good path through the pipeline that returns a visibly rich brief —
+ * we fire Deepen on the two where the extra packs (SEC, FEMA, NOAA, permits)
+ * are what makes the result sing. Kept in one place so the README, the UI,
+ * and any future e2e screenshot script stay in sync.
+ */
+export const SUGGESTED_QUERIES: {
+  label: string;
+  query: string;
+  mode: "investigate" | "monitor" | "verify";
+  deepen?: boolean;
+  hint: string;
+}[] = [
+  {
+    label: "Mundra Port · construction",
+    query: "Mundra Port construction activity",
+    mode: "investigate",
+    hint: "Investigate brief with a news lead.",
+  },
+  {
+    label: "Cushing OK · oil storage",
+    query: "Cushing, Oklahoma oil storage",
+    mode: "monitor",
+    hint: "Monitor brief with live throughput signals.",
+  },
+  {
+    label: "Tesla Gigafactory · Nevada",
+    query: "Tesla Gigafactory Nevada",
+    mode: "investigate",
+    deepen: true,
+    hint: "Deepen · SEC filings + state hazard context.",
+  },
+  {
+    label: "Hell's Kitchen · NYC",
+    query: "Give me a read on Hell's Kitchen, New York",
+    mode: "investigate",
+    deepen: true,
+    hint: "Deepen · NYC DOB permits + NOAA alerts.",
+  },
+];
+
 function hashString(value: string): number {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
