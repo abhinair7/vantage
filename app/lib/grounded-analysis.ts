@@ -204,6 +204,13 @@ type WikiBrief = {
 
 type WikidataClaimValue = {
   id?: string;
+  // GlobeCoordinateValue — present on P625 "coordinate location" claims.
+  // Used by the Wikidata place-resolution fallback to pull coords for
+  // landmarks that Nominatim indexed poorly (common worldwide).
+  latitude?: number;
+  longitude?: number;
+  precision?: number;
+  globe?: string;
 };
 
 type WikidataEntity = {
@@ -795,7 +802,108 @@ async function resolvePlace(
   }
 
   const best = pickBestPlace(candidates, query, subject);
-  return best ? normalizePlace(best) : null;
+  if (best) return normalizePlace(best);
+
+  // Last-ditch worldwide fallback: Wikidata knows landmarks, buildings,
+  // institutions, and non-English place names that OSM's index can miss
+  // (famous but patchy examples: many South Asian government buildings,
+  // historical sites, transliterated names). If wbsearchentities returns
+  // a hit with a P625 coordinate, reverse-geocode it through Nominatim so
+  // the rest of the pipeline sees a fully-populated ResolvedPlace.
+  const wikidataFallback = await resolvePlaceViaWikidata(query, subject, includeGeometry);
+  return wikidataFallback;
+}
+
+/**
+ * Wikidata-backed place resolver.
+ *
+ * Vantage is useless if a well-known landmark can't be resolved to a
+ * coordinate. Nominatim is great at streets but misses named entities
+ * (buildings, institutions, transliterated names) in large parts of the
+ * world. Wikidata has 100M+ entities with P625 "coordinate location"
+ * claims and much better non-English indexing. This fallback:
+ *
+ *   1. wbsearchentities: query the Wikidata entity search
+ *   2. wbgetentities: pull P625 off the top candidate
+ *   3. Nominatim reverse: populate the full ResolvedPlace
+ *
+ * If any step fails, return null — the gatekeeper will still withhold
+ * rather than fabricate. But the hit rate on real-world landmark queries
+ * goes up substantially.
+ */
+async function resolvePlaceViaWikidata(
+  query: string,
+  subject: Subject,
+  includeGeometry: boolean,
+): Promise<ResolvedPlace | null> {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const push = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(trimmed);
+  };
+
+  // Try the most specific hints first, then loosen.
+  extractLocationHints(query).forEach(push);
+  buildPlaceSearchQueries(query, subject).forEach(push);
+  push(query);
+
+  for (const term of candidates.slice(0, 5)) {
+    const searchParams = new URLSearchParams({
+      action: "wbsearchentities",
+      format: "json",
+      language: "en",
+      uselang: "en",
+      type: "item",
+      limit: "5",
+      search: term,
+    });
+    type WbSearchResponse = { search?: Array<{ id?: string }> };
+    const searchData = await fetchJson<WbSearchResponse>(
+      `${WIKIDATA_API}?${searchParams.toString()}`,
+    );
+    const ids = (searchData?.search ?? [])
+      .map((hit) => hit.id)
+      .filter((id): id is string => Boolean(id))
+      .slice(0, 3);
+    if (ids.length === 0) continue;
+
+    const getParams = new URLSearchParams({
+      action: "wbgetentities",
+      format: "json",
+      languages: "en",
+      props: "claims|labels",
+      ids: ids.join("|"),
+    });
+    const entityData = await fetchJson<WikidataResponse>(
+      `${WIKIDATA_API}?${getParams.toString()}`,
+    );
+
+    for (const id of ids) {
+      const entity = entityData?.entities?.[id];
+      const coord = readWikidataCoordinate(entity);
+      if (!coord) continue;
+      const [lon, lat] = coord;
+      const reverse = await fetchNominatimReverse(lon, lat, includeGeometry);
+      if (reverse) return normalizePlace(reverse);
+    }
+  }
+
+  return null;
+}
+
+function readWikidataCoordinate(
+  entity: WikidataEntity | undefined,
+): [number, number] | null {
+  const value = entity?.claims?.P625?.[0]?.mainsnak?.datavalue?.value;
+  if (!value || typeof value.latitude !== "number" || typeof value.longitude !== "number") {
+    return null;
+  }
+  return [value.longitude, value.latitude];
 }
 
 function buildPlaceSearchQueries(query: string, subject: Subject): string[] {
@@ -1070,6 +1178,73 @@ async function fetchWikipediaBrief(tag?: string): Promise<WikiBrief | null> {
   };
 }
 
+type NewsLocale = { hl: string; gl: string; ceid: string };
+
+// Google News ceid strings for countries Vantage sees most often. Falls
+// back to International English (`:en`) for anywhere else — that still
+// biases toward English-language publishers, but away from US-only.
+// Keys are ISO-3166 alpha-2 (lowercase); Nominatim's `address.country_code`
+// returns the same form, so the lookup is direct.
+const NEWS_LOCALES: Record<string, NewsLocale> = {
+  us: { hl: "en-US", gl: "US", ceid: "US:en" },
+  gb: { hl: "en-GB", gl: "GB", ceid: "GB:en" },
+  ca: { hl: "en-CA", gl: "CA", ceid: "CA:en" },
+  au: { hl: "en-AU", gl: "AU", ceid: "AU:en" },
+  nz: { hl: "en-NZ", gl: "NZ", ceid: "NZ:en" },
+  in: { hl: "en-IN", gl: "IN", ceid: "IN:en" },
+  ie: { hl: "en-IE", gl: "IE", ceid: "IE:en" },
+  sg: { hl: "en-SG", gl: "SG", ceid: "SG:en" },
+  za: { hl: "en-ZA", gl: "ZA", ceid: "ZA:en" },
+  ph: { hl: "en-PH", gl: "PH", ceid: "PH:en" },
+  ng: { hl: "en-NG", gl: "NG", ceid: "NG:en" },
+  ke: { hl: "en-KE", gl: "KE", ceid: "KE:en" },
+  de: { hl: "de", gl: "DE", ceid: "DE:de" },
+  fr: { hl: "fr", gl: "FR", ceid: "FR:fr" },
+  es: { hl: "es", gl: "ES", ceid: "ES:es" },
+  it: { hl: "it", gl: "IT", ceid: "IT:it" },
+  pt: { hl: "pt-PT", gl: "PT", ceid: "PT:pt-150" },
+  br: { hl: "pt-BR", gl: "BR", ceid: "BR:pt-419" },
+  mx: { hl: "es-419", gl: "MX", ceid: "MX:es-419" },
+  ar: { hl: "es-419", gl: "AR", ceid: "AR:es-419" },
+  nl: { hl: "nl", gl: "NL", ceid: "NL:nl" },
+  be: { hl: "nl", gl: "BE", ceid: "BE:nl" },
+  ch: { hl: "de", gl: "CH", ceid: "CH:de" },
+  at: { hl: "de", gl: "AT", ceid: "AT:de" },
+  se: { hl: "sv", gl: "SE", ceid: "SE:sv" },
+  no: { hl: "no", gl: "NO", ceid: "NO:no" },
+  dk: { hl: "da", gl: "DK", ceid: "DK:da" },
+  fi: { hl: "fi", gl: "FI", ceid: "FI:fi" },
+  pl: { hl: "pl", gl: "PL", ceid: "PL:pl" },
+  cz: { hl: "cs", gl: "CZ", ceid: "CZ:cs" },
+  gr: { hl: "el", gl: "GR", ceid: "GR:el" },
+  tr: { hl: "tr", gl: "TR", ceid: "TR:tr" },
+  ua: { hl: "uk", gl: "UA", ceid: "UA:uk" },
+  ru: { hl: "ru", gl: "RU", ceid: "RU:ru" },
+  jp: { hl: "ja", gl: "JP", ceid: "JP:ja" },
+  kr: { hl: "ko", gl: "KR", ceid: "KR:ko" },
+  cn: { hl: "zh-CN", gl: "CN", ceid: "CN:zh-Hans" },
+  tw: { hl: "zh-TW", gl: "TW", ceid: "TW:zh-Hant" },
+  hk: { hl: "zh-HK", gl: "HK", ceid: "HK:zh-Hant" },
+  th: { hl: "th", gl: "TH", ceid: "TH:th" },
+  vn: { hl: "vi", gl: "VN", ceid: "VN:vi" },
+  id: { hl: "id", gl: "ID", ceid: "ID:id" },
+  my: { hl: "en-MY", gl: "MY", ceid: "MY:en" },
+  ae: { hl: "ar", gl: "AE", ceid: "AE:ar" },
+  sa: { hl: "ar", gl: "SA", ceid: "SA:ar" },
+  eg: { hl: "ar", gl: "EG", ceid: "EG:ar" },
+  il: { hl: "he", gl: "IL", ceid: "IL:he" },
+  pk: { hl: "en-PK", gl: "PK", ceid: "PK:en" },
+  bd: { hl: "bn", gl: "BD", ceid: "BD:bn" },
+};
+
+const DEFAULT_NEWS_LOCALE: NewsLocale = { hl: "en", gl: "", ceid: ":en" };
+
+function resolveNewsLocale(place: ResolvedPlace): NewsLocale {
+  const code = place.address?.country_code?.toLowerCase();
+  if (code && NEWS_LOCALES[code]) return NEWS_LOCALES[code];
+  return DEFAULT_NEWS_LOCALE;
+}
+
 async function fetchRegionalNews(
   query: string,
   place: ResolvedPlace,
@@ -1077,8 +1252,16 @@ async function fetchRegionalNews(
 ): Promise<NewsSnapshot | null> {
   const topicTerms = buildNewsTopicTerms(query, subject, place);
   const queries = buildNewsSearchQueries(place, topicTerms);
+  // Google News returns very different results depending on hl/gl/ceid.
+  // Using en-US/US/US:en globally means a Hamburg or Mumbai query gets the
+  // wrong publisher mix — we bias toward US wires and lose local coverage.
+  // Pull the anchor's ISO country (via Nominatim's address.country_code) and
+  // use it to localise the feed so regional publishers actually surface.
+  const newsLocale = resolveNewsLocale(place);
   const googleBatches = await Promise.all(
-    queries.map((candidate) => fetchGoogleNewsArticles(candidate.query, candidate.scope)),
+    queries.map((candidate) =>
+      fetchGoogleNewsArticles(candidate.query, candidate.scope, newsLocale),
+    ),
   );
   const collected = googleBatches.flat();
 
@@ -1194,12 +1377,13 @@ function buildNewsSearchQueries(
 async function fetchGoogleNewsArticles(
   query: string,
   scope: NewsArticle["queryScope"],
+  locale: NewsLocale = DEFAULT_NEWS_LOCALE,
 ): Promise<NewsArticle[]> {
   const params = new URLSearchParams({
     q: query,
-    hl: "en-US",
-    gl: "US",
-    ceid: "US:en",
+    hl: locale.hl,
+    gl: locale.gl,
+    ceid: locale.ceid,
   });
 
   const xml = await fetchText(`${GOOGLE_NEWS_RSS}?${params.toString()}`);
@@ -1632,6 +1816,19 @@ async function fetchGleifEntity(
   return entities;
 }
 
+// EEA + EFTA + UK. Used to route the AQI scale (European AQI reads more
+// naturally for these anchors; US AQI stays the default elsewhere since
+// it's the most internationally recognised scale).
+const EUROPEAN_COUNTRY_CODES = new Set([
+  "at", "be", "bg", "hr", "cy", "cz", "dk", "ee", "fi", "fr", "de", "gr",
+  "hu", "ie", "it", "lv", "lt", "lu", "mt", "nl", "pl", "pt", "ro", "sk",
+  "si", "es", "se", "is", "li", "no", "ch", "gb",
+]);
+
+function isEuropeanCountry(code?: string): boolean {
+  return Boolean(code && EUROPEAN_COUNTRY_CODES.has(code.toLowerCase()));
+}
+
 async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
   // Open-Meteo Air Quality — free, no key, global. Returns a single gridded
   // reading at the anchor coordinate rather than per-station data; the narrative
@@ -1639,10 +1836,17 @@ async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
   // (OpenAQ v2 is deprecated and v3 gates behind an API key — not an option
   // for this prototype's no-key promise.)
   const [lon, lat] = place.center;
+  // Pick an AQI scale appropriate to the anchor's region. US AQI is the
+  // default because it's globally recognised, but a European address
+  // reads the European AQI more naturally. Both are served by Open-Meteo
+  // from the same endpoint and can be requested together.
+  const useEuroAqi = isEuropeanCountry(place.address?.country_code);
+  const aqiKey = useEuroAqi ? "european_aqi" : "us_aqi";
+  const aqiLabel = useEuroAqi ? "European AQI" : "US AQI";
   const params = new URLSearchParams({
     latitude: lat.toFixed(4),
     longitude: lon.toFixed(4),
-    current: "us_aqi,pm10,pm2_5,ozone,nitrogen_dioxide",
+    current: `${aqiKey},pm10,pm2_5,ozone,nitrogen_dioxide`,
   });
   const r = await fetchJson<{
     current?: Record<string, number | string | null> & { time?: string };
@@ -1655,7 +1859,7 @@ async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
 
   // Stable display order so the brief reads the same across runs.
   const parameterOrder: Array<{ key: string; label: string; fallbackUnit: string }> = [
-    { key: "us_aqi", label: "US AQI", fallbackUnit: "" },
+    { key: aqiKey, label: aqiLabel, fallbackUnit: "" },
     { key: "pm2_5", label: "PM2.5", fallbackUnit: "μg/m³" },
     { key: "pm10", label: "PM10", fallbackUnit: "μg/m³" },
     { key: "ozone", label: "Ozone", fallbackUnit: "μg/m³" },
