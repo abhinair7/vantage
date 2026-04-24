@@ -4,6 +4,7 @@ import {
   type DemoResult,
   type Evidence,
   type Marker,
+  type NarrativeChunk,
 } from "./demo-results";
 import {
   detectMode,
@@ -264,6 +265,28 @@ type EdgarFiling = {
   cik: string;
 };
 
+type HazardHit = {
+  kind: "earthquake" | "alert" | "disaster";
+  summary: string;
+  whenIso?: string;
+  url?: string;
+};
+
+type AirqHit = {
+  location: string;
+  parameter: string;
+  value: number;
+  unit: string;
+  when: string;
+};
+
+type PermitHit = {
+  city: string;
+  summary: string;
+  when?: string;
+  url?: string;
+};
+
 type EvidenceRefs = {
   place: string;
   context?: string;
@@ -271,6 +294,9 @@ type EvidenceRefs = {
   background?: string;
   news?: string[];
   filings?: string[];
+  hazards?: string[];
+  airq?: string[];
+  permits?: string[];
 };
 
 type ContextSnapshot = {
@@ -333,7 +359,14 @@ async function buildGroundedAnalysis(
     fetchRegionalNews(query, place, subject),
   ]);
 
-  const filings: EdgarFiling[] = deepen ? await fetchEdgarFilings(place, wikidata) : [];
+  const [filings, hazards, airq, permits] = deepen
+    ? await Promise.all([
+        fetchEdgarFilings(place, wikidata),
+        fetchHazardSignals(place),
+        fetchAirQuality(place),
+        fetchPermitActivity(place),
+      ])
+    : [[] as EdgarFiling[], [] as HazardHit[], [] as AirqHit[], [] as PermitHit[]];
 
   const wiki = await fetchWikipediaBrief(place.wikipediaTag ?? wikidata?.wikipediaTag);
   const topFeatures = features.slice(0, 5);
@@ -441,6 +474,41 @@ async function buildGroundedAnalysis(
     }),
   );
 
+  const hazardEvidenceIds = hazards.slice(0, 4).map((h, index) => {
+    const sourceLabel =
+      h.kind === "earthquake"
+        ? `USGS · M2.5+ within 200 km${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`
+        : h.kind === "alert"
+          ? `NOAA NWS · active alert${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`
+          : `FEMA · disaster declaration${h.whenIso ? ` · ${formatPublishedDate(h.whenIso)}` : ""}`;
+    return addEvidence({
+      kind: "event",
+      claim: h.summary,
+      source: sourceLabel,
+      sourceUrl: h.url,
+      hashSeed: `hazard:${query}:${h.kind}:${index}:${h.summary}`,
+    });
+  });
+
+  const airqEvidenceIds = airq.slice(0, 3).map((a, index) =>
+    addEvidence({
+      kind: "measurement",
+      claim: `${a.parameter} reading ${a.value} ${a.unit} at ${a.location}.`,
+      source: `OpenAQ · latest within 25 km · ${formatPublishedDate(a.when)}`,
+      hashSeed: `airq:${query}:${a.location}:${a.parameter}:${index}`,
+    }),
+  );
+
+  const permitEvidenceIds = permits.slice(0, 4).map((p, index) =>
+    addEvidence({
+      kind: "event",
+      claim: p.summary,
+      source: `${p.city} open-data portal${p.when ? ` · ${formatPublishedDate(p.when)}` : ""}`,
+      sourceUrl: p.url,
+      hashSeed: `permit:${query}:${p.city}:${index}:${p.summary}`,
+    }),
+  );
+
   const refs: EvidenceRefs = {
     place: placeEvidenceId,
     context: contextEvidenceId,
@@ -448,12 +516,15 @@ async function buildGroundedAnalysis(
     background: backgroundEvidenceId,
     news: newsEvidenceIds,
     filings: filingEvidenceIds,
+    hazards: hazardEvidenceIds,
+    airq: airqEvidenceIds,
+    permits: permitEvidenceIds,
   };
 
   // When recent local reporting exists, news leads the brief — everything
   // else becomes supporting context. That matches how a human analyst would
   // actually read the same evidence pack.
-  const narrative = news
+  const narrative: NarrativeChunk[] = news
     ? [
         {
           text: buildNewsLeadLine(place, subject, news),
@@ -495,8 +566,37 @@ async function buildGroundedAnalysis(
     const filingNames = Array.from(new Set(filings.slice(0, 3).map((f) => f.company)));
     const filingForms = Array.from(new Set(filings.slice(0, 3).map((f) => f.form)));
     narrative.push({
-      text: `Regulatory timeline: SEC EDGAR returns ${filings.length} matching filing${filings.length === 1 ? "" : "s"} (${filingForms.join(", ")}) tied to ${joinNatural(filingNames)}. These are the on-record public disclosures around the anchor, not press coverage — treat them as an audit trail, not a live operational read.`,
+      title: "Regulatory timeline",
+      text: `SEC EDGAR returns ${filings.length} matching filing${filings.length === 1 ? "" : "s"} (${filingForms.join(", ")}) tied to ${joinNatural(filingNames)}. These are the on-record public disclosures around the anchor, not press coverage — treat them as an audit trail, not a live operational read.`,
       refs: compactRefs([...(refs.filings ?? []), refs.entity, refs.place]),
+    });
+  }
+
+  if (hazards.length > 0) {
+    const heads = hazards.slice(0, 3).map((h) => h.summary);
+    narrative.push({
+      title: "Hazard and alert context",
+      text: `${joinNatural(heads)}. Pulled from USGS (global seismic), NOAA (active US weather alerts), and FEMA (US disaster declarations). This is the free-source natural-hazard read for the anchor, not a full catastrophe model.`,
+      refs: compactRefs([...(refs.hazards ?? []), refs.place]),
+    });
+  }
+
+  if (airq.length > 0) {
+    const lines = airq.slice(0, 3).map((a) => `${a.parameter} ${a.value} ${a.unit} (${a.location})`);
+    narrative.push({
+      title: "Air quality snapshot",
+      text: `${joinNatural(lines)}. Latest OpenAQ readings within 25 km of the anchor. Treat as point-in-time sensor output — meaningful for near-term operational planning, not a long-run air-quality model.`,
+      refs: compactRefs([...(refs.airq ?? []), refs.place]),
+    });
+  }
+
+  if (permits.length > 0) {
+    const cities = Array.from(new Set(permits.map((p) => p.city)));
+    const samples = permits.slice(0, 3).map((p) => p.summary);
+    narrative.push({
+      title: "Permit activity",
+      text: `${permits.length} recent permit record${permits.length === 1 ? "" : "s"} from ${joinNatural(cities)} — ${joinNatural(samples)}. Sourced from the city's open-data portal (Socrata). Useful as a construction-intensity and build-cycle signal around the anchor.`,
+      refs: compactRefs([...(refs.permits ?? []), refs.place]),
     });
   }
 
@@ -507,13 +607,29 @@ async function buildGroundedAnalysis(
     Boolean(wiki),
     Boolean(news),
   );
+  const deepenBullets: string[] = [];
+  if (filings.length > 0) {
+    deepenBullets.push(
+      `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${filings.length} filing${filings.length === 1 ? "" : "s"} folded into the evidence ledger.`,
+    );
+  }
+  if (hazards.length > 0) {
+    deepenBullets.push(
+      `Consulted USGS earthquakes, NOAA active alerts, and FEMA disaster declarations for natural-hazard context; ${hazards.length} hazard item${hazards.length === 1 ? "" : "s"} recorded.`,
+    );
+  }
+  if (airq.length > 0) {
+    deepenBullets.push(
+      `Consulted OpenAQ for the latest air-quality sensor readings within 25 km of the anchor; ${airq.length} station reading${airq.length === 1 ? "" : "s"} recorded.`,
+    );
+  }
+  if (permits.length > 0) {
+    deepenBullets.push(
+      `Consulted city open-data portals for recent permit activity; ${permits.length} permit record${permits.length === 1 ? "" : "s"} recorded.`,
+    );
+  }
   const withDeepenMethodology =
-    filings.length > 0
-      ? [
-          ...baseMethodology,
-          `Consulted SEC EDGAR full-text search for regulatory filings around the anchor; ${filings.length} matching filing${filings.length === 1 ? "" : "s"} folded into the evidence ledger.`,
-        ]
-      : baseMethodology;
+    deepenBullets.length > 0 ? [...baseMethodology, ...deepenBullets] : baseMethodology;
   const methodology = overrideApplied
     ? [
         "Evidence-floor override applied at the customer's request — the Gatekeeper would normally have withheld this brief.",
@@ -1143,6 +1259,297 @@ async function fetchEdgarFilings(
 
   return filings;
 }
+
+async function fetchHazardSignals(place: ResolvedPlace): Promise<HazardHit[]> {
+  const [lon, lat] = place.center;
+  const countryCode = (place.address.country_code || "").toLowerCase();
+  const isUs = countryCode === "us";
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const tasks: Array<Promise<HazardHit[]>> = [];
+
+  // USGS Earthquakes — global
+  tasks.push((async () => {
+    const params = new URLSearchParams({
+      format: "geojson",
+      starttime: thirtyDaysAgo,
+      latitude: String(lat),
+      longitude: String(lon),
+      maxradiuskm: "200",
+      minmagnitude: "2.5",
+      orderby: "time",
+      limit: "4",
+    });
+    const r = await fetchJson<{
+      features?: Array<{
+        properties?: { mag?: number; place?: string; time?: number; url?: string };
+      }>;
+    }>(`https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`);
+    return (r?.features ?? []).flatMap((f) => {
+      const p = f.properties;
+      if (!p || p.mag == null || !p.time) return [];
+      return [{
+        kind: "earthquake" as const,
+        summary: `M${p.mag.toFixed(1)} earthquake${p.place ? ` — ${p.place}` : ""}`,
+        whenIso: new Date(p.time).toISOString(),
+        url: p.url,
+      }];
+    });
+  })());
+
+  if (isUs) {
+    // NOAA active alerts at point
+    tasks.push((async () => {
+      const r = await fetchJson<{
+        features?: Array<{
+          id?: string;
+          properties?: {
+            event?: string;
+            severity?: string;
+            sent?: string;
+            areaDesc?: string;
+          };
+        }>;
+      }>(`https://api.weather.gov/alerts/active?point=${lat},${lon}`);
+      return (r?.features ?? []).slice(0, 3).flatMap((f) => {
+        const p = f.properties;
+        if (!p || !p.event) return [];
+        const area = p.areaDesc ? p.areaDesc.split(";")[0].trim() : "";
+        return [{
+          kind: "alert" as const,
+          summary: `${p.severity ? `${p.severity} ` : ""}${p.event}${area ? ` — ${area}` : ""}`,
+          whenIso: p.sent,
+          url: f.id,
+        }];
+      });
+    })());
+
+    // OpenFEMA recent disaster declarations (by state)
+    const stateCode = usStateCode(place.address);
+    if (stateCode) {
+      tasks.push((async () => {
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const params = new URLSearchParams({
+          $filter: `state eq '${stateCode}' and declarationDate gt '${ninetyDaysAgo}T00:00:00.000z'`,
+          $orderby: "declarationDate desc",
+          $top: "3",
+          $select: "declarationTitle,incidentType,declarationDate,designatedArea,disasterNumber",
+        });
+        const r = await fetchJson<{
+          DisasterDeclarationsSummaries?: Array<{
+            declarationTitle?: string;
+            incidentType?: string;
+            declarationDate?: string;
+            designatedArea?: string;
+            disasterNumber?: number;
+          }>;
+        }>(`https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?${params.toString()}`);
+        return (r?.DisasterDeclarationsSummaries ?? []).flatMap((d) => {
+          if (!d.declarationTitle) return [];
+          return [{
+            kind: "disaster" as const,
+            summary: `${d.incidentType ?? "Declared disaster"} — ${d.declarationTitle}${d.designatedArea ? ` (${d.designatedArea})` : ""}`,
+            whenIso: d.declarationDate,
+            url: d.disasterNumber
+              ? `https://www.fema.gov/disaster/${d.disasterNumber}`
+              : undefined,
+          }];
+        });
+      })());
+    }
+  }
+
+  const settled = await Promise.all(tasks);
+  return settled.flat().slice(0, 5);
+}
+
+async function fetchAirQuality(place: ResolvedPlace): Promise<AirqHit[]> {
+  const [lon, lat] = place.center;
+  const r = await fetchJson<{
+    results?: Array<{
+      location?: string;
+      city?: string;
+      measurements?: Array<{
+        parameter?: string;
+        value?: number;
+        unit?: string;
+        lastUpdated?: string;
+      }>;
+    }>;
+  }>(`https://api.openaq.org/v2/latest?coordinates=${lat},${lon}&radius=25000&limit=3`);
+  return (r?.results ?? []).flatMap((loc) => {
+    const measurement = (loc.measurements ?? []).find(
+      (m) => m.parameter && m.value != null && m.unit && m.lastUpdated,
+    );
+    if (!measurement) return [];
+    return [{
+      location: loc.location || loc.city || "Nearby station",
+      parameter: (measurement.parameter || "").toUpperCase(),
+      value: measurement.value!,
+      unit: measurement.unit!,
+      when: measurement.lastUpdated!,
+    }];
+  });
+}
+
+async function fetchPermitActivity(place: ResolvedPlace): Promise<PermitHit[]> {
+  const addr = place.address;
+  const city = (addr.city || addr.town || addr.municipality || addr.borough || "").toLowerCase();
+  const state = (addr.state || "").toLowerCase();
+
+  type PermitSource = {
+    matches: boolean;
+    endpoint: string;
+    portalUrl: string;
+    cityLabel: string;
+    mapper: (row: Record<string, unknown>) => PermitHit | null;
+  };
+
+  const asString = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+  const sources: PermitSource[] = [
+    {
+      matches:
+        state.includes("new york") &&
+        /new york|manhattan|brooklyn|queens|bronx|staten/i.test(city),
+      cityLabel: "New York (DOB Now)",
+      endpoint:
+        "https://data.cityofnewyork.us/resource/rbx6-tga4.json?$limit=3&$order=approved_date DESC",
+      portalUrl: "https://www.nyc.gov/site/buildings/dob/dob-now.page",
+      mapper: (r) => {
+        const when = asString(r.approved_date);
+        const work = asString(r.work_type) || "Building work";
+        const house = asString(r.house__) || asString(r.house_no) || "";
+        const street = asString(r.street_name) || "";
+        const loc = `${house} ${street}`.trim();
+        return {
+          city: "New York (DOB Now)",
+          summary: `${work}${loc ? ` at ${loc}` : ""}`.trim(),
+          when,
+          url: "https://www.nyc.gov/site/buildings/dob/dob-now.page",
+        };
+      },
+    },
+    {
+      matches: state.includes("california") && /san francisco/i.test(city),
+      cityLabel: "San Francisco (DBI)",
+      endpoint:
+        "https://data.sfgov.org/resource/i98e-djp9.json?$limit=3&$order=filed_date DESC",
+      portalUrl: "https://dbi-eservices.sfgov.org/PermitPortal",
+      mapper: (r) => {
+        const when = asString(r.filed_date);
+        const type = asString(r.permit_type_definition) || asString(r.permit_type) || "Permit";
+        const desc = asString(r.description);
+        return {
+          city: "San Francisco (DBI)",
+          summary: `${type}${desc ? ` — ${desc.slice(0, 140)}` : ""}`,
+          when,
+          url: "https://dbi-eservices.sfgov.org/PermitPortal",
+        };
+      },
+    },
+    {
+      matches: state.includes("illinois") && /chicago/i.test(city),
+      cityLabel: "Chicago (Building Permits)",
+      endpoint:
+        "https://data.cityofchicago.org/resource/ydr8-5enu.json?$limit=3&$order=issue_date DESC",
+      portalUrl: "https://webapps1.chicago.gov/buildingrecords/",
+      mapper: (r) => {
+        const when = asString(r.issue_date);
+        const type = asString(r.permit_type) || "Permit";
+        const desc = asString(r.work_description);
+        return {
+          city: "Chicago (Building Permits)",
+          summary: `${type}${desc ? ` — ${desc.slice(0, 140)}` : ""}`,
+          when,
+          url: "https://webapps1.chicago.gov/buildingrecords/",
+        };
+      },
+    },
+    {
+      matches: state.includes("washington") && /seattle/i.test(city),
+      cityLabel: "Seattle (SDCI)",
+      endpoint:
+        "https://data.seattle.gov/resource/76t5-zqzr.json?$limit=3&$order=applieddate DESC",
+      portalUrl: "https://cosaccela.seattle.gov/portal/",
+      mapper: (r) => {
+        const when = asString(r.applieddate);
+        const type = asString(r.permittype) || "Permit";
+        const desc = asString(r.description);
+        return {
+          city: "Seattle (SDCI)",
+          summary: `${type}${desc ? ` — ${desc.slice(0, 140)}` : ""}`,
+          when,
+          url: "https://cosaccela.seattle.gov/portal/",
+        };
+      },
+    },
+    {
+      matches: state.includes("california") && /los angeles/i.test(city),
+      cityLabel: "Los Angeles (LADBS)",
+      endpoint:
+        "https://data.lacity.org/resource/yv23-pmwf.json?$limit=3&$order=issue_date DESC",
+      portalUrl: "https://www.ladbs.org/services/online-services/permit-report",
+      mapper: (r) => {
+        const when = asString(r.issue_date);
+        const type = asString(r.permit_type) || "Permit";
+        const desc = asString(r.work_description) || asString(r.use_desc);
+        return {
+          city: "Los Angeles (LADBS)",
+          summary: `${type}${desc ? ` — ${desc.slice(0, 140)}` : ""}`,
+          when,
+          url: "https://www.ladbs.org/services/online-services/permit-report",
+        };
+      },
+    },
+  ];
+
+  const active = sources.filter((s) => s.matches);
+  if (active.length === 0) return [];
+
+  const results = await Promise.all(
+    active.map((s) =>
+      fetchJson<Array<Record<string, unknown>>>(s.endpoint).then(
+        (rows) => ({ source: s, rows: rows ?? [] }),
+      ),
+    ),
+  );
+
+  return results.flatMap(({ source, rows }) => {
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .map((r) => source.mapper(r))
+      .filter((hit): hit is PermitHit => hit !== null);
+  });
+}
+
+function usStateCode(address: Record<string, string>): string | null {
+  const iso = address["ISO3166-2-lvl4"];
+  if (iso && iso.toUpperCase().startsWith("US-")) return iso.slice(3).toUpperCase();
+  const name = (address.state || "").toLowerCase();
+  if (!name) return null;
+  return US_STATE_CODES[name] || null;
+}
+
+const US_STATE_CODES: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR",
+  california: "CA", colorado: "CO", connecticut: "CT", delaware: "DE",
+  "district of columbia": "DC", florida: "FL", georgia: "GA", hawaii: "HI",
+  idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
+  kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME",
+  maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN",
+  mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE",
+  nevada: "NV", "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM",
+  "new york": "NY", "north carolina": "NC", "north dakota": "ND", ohio: "OH",
+  oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI",
+  "south carolina": "SC", "south dakota": "SD", tennessee: "TN", texas: "TX",
+  utah: "UT", vermont: "VT", virginia: "VA", washington: "WA",
+  "west virginia": "WV", wisconsin: "WI", wyoming: "WY",
+};
 
 function buildGdeltSearchQuery(place: ResolvedPlace, topicTerms: string[]): string | null {
   const cityLike =

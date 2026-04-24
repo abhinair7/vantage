@@ -45,6 +45,12 @@ export type AOI = {
 export type NarrativeChunk = {
   text: string;
   refs: string[];
+  /**
+   * Optional explicit section title. When set, the result UI renders this
+   * verbatim as the section label instead of using its positional mapping.
+   * Used by the Deepen path where chunks are appended conditionally.
+   */
+  title?: string;
 };
 
 export type DemoResult = {

@@ -466,27 +466,33 @@ function titleCaseMode(mode: DemoResult["mode"]): string {
 
 function deriveSections(result: DemoResult): NarrativeSection[] {
   const measurementIntent = detectMeasurementIntent(result.query);
+  const deepenTitles = [
+    "Regulatory timeline",
+    "Hazard and alert context",
+    "Air quality snapshot",
+    "Permit activity",
+  ];
   const labelsByMode: Record<DemoResult["mode"], string[]> = {
     investigate: [
       "Operating picture",
       "Commercial read-through",
       "Confidence and limits",
       "Recommended next step",
-      "Regulatory timeline",
+      ...deepenTitles,
     ],
     verify: [
       "Site validation",
       "Risk relevance",
       "Confidence and limits",
       "Recommended next step",
-      "Regulatory timeline",
+      ...deepenTitles,
     ],
     monitor: [
       "Operating picture",
       "Signal read-through",
       "Confidence and limits",
       "Recommended next step",
-      "Regulatory timeline",
+      ...deepenTitles,
     ],
   };
 
@@ -506,11 +512,12 @@ function deriveSections(result: DemoResult): NarrativeSection[] {
   return result.narrative.map((chunk, index) => ({
     ...chunk,
     title:
-      result.kind === "insufficient"
+      chunk.title ??
+      (result.kind === "insufficient"
         ? withheldLabels[index] ?? "Why the brief stopped here"
         : measurementIntent === "footprint"
           ? measurementLabels[index] ?? `Supporting point ${index + 1}`
-        : labelsByMode[result.mode][index] ?? `Supporting point ${index + 1}`,
+          : labelsByMode[result.mode][index] ?? `Supporting point ${index + 1}`),
   }));
 }
 
